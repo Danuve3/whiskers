@@ -4,6 +4,9 @@ import { Game } from './game.ts';
 import { setupUI, button, iconImg, el } from './ui/kit.ts';
 import { openEditor } from './ui/editor.ts';
 import { load, store, type SaveData } from './save/save.ts';
+import { newWorld, type WorldState } from './game.ts';
+import { openRadial, closeRadial, openCard, toast } from './ui/animalUI.ts';
+import { decay, hearts, FOODS } from './sim/model.ts';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -33,9 +36,47 @@ function wardrobe(title: string) {
   });
 }
 
+// estado del mundo dentro de la partida
+if (!save.world.animals) Object.assign(save.world, newWorld((save.created % 2147483646) + 1));
+game.world = save.world as unknown as WorldState;
+game.events = {
+  animalTap: (e) => openRadial(game, e, (en) => openCard(en, (n) => {
+    en.data.name = n;
+    en.ent.name = n;
+    persist();
+  })),
+  groundTap: () => closeRadial(),
+  toast: (m) => toast(m),
+  care: (e, act, res) => {
+    if (!res.ok) {
+      if (res.reason) toast(res.reason);
+      return;
+    }
+    const st = game.world.stats;
+    const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
+    st[key] = (st[key] ?? 0) + 1;
+    if (res.favorite) toast(`¡${FOODS[e.data.favorite].name}! Es la comida favorita de ${e.data.name}.`);
+    if (res.heartUp) toast(`${e.data.name} confía más en ti: ahora tiene ${hearts(e.data)} ${hearts(e.data) === 1 ? 'corazón' : 'corazones'}.`);
+    else if (act === 'heal') toast(`Le pones una tirita a ${e.data.name}. ¡Como nuevo!`);
+    persist();
+  },
+};
+
 void (async () => {
   await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
   await game.init();
+  // las necesidades bajan muy despacio con el tiempo real
+  let lastDecay = Date.now();
+  setInterval(() => {
+    const now = Date.now();
+    const h = (now - lastDecay) / 3_600_000;
+    lastDecay = now;
+    for (const a of game.world.animals) decay(a, h, now);
+  }, 5000);
+  setInterval(() => {
+    const e = game.maybeArrival(Date.now());
+    if (e) toast(`Alguien nuevo ronda la plaza… ¿será ${e.data.name}?`);
+  }, 30000);
   game.player.setOutfit(save.outfit);
   game.start();
   if (!shot) {

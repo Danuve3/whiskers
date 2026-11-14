@@ -55,3 +55,39 @@
 /* HUD provisional */
 .hud { position: fixed; top: calc(env(safe-area-inset-top) + var(--u) * 3); right: calc(var(--u) * 3); display: flex; gap: calc(var(--u) * 2); }
 .hud .btn { min-height: calc(var(--u) * 20); }
+
+/* Menú radial de un animal */
+.radial { position: fixed; z-index: 5; pointer-events: none; }
+.radial .ring { position: absolute; left: 0; top: 0; }
+.radial .ring .btn { position: absolute; pointer-events: auto; padding: 0; width: calc(var(--u) * 22); height: calc(var(--u) * 22); min-height: 0;
+  transform: translate(-50%, -50%) scale(0.2); opacity: 0; transition: transform 0.22s cubic-bezier(0.3, 1.6, 0.5, 1), opacity 0.15s; }
+.radial.open .ring .btn { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+.radial .ring .btn.off { filter: grayscale(0.8) brightness(0.92); }
+.radial .tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: auto;
+  padding: calc(var(--u) * 1) calc(var(--u) * 3); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 1); }
+.hearts { display: flex; gap: calc(var(--u) * 1); }
+.hearts img { width: calc(var(--u) * 7); height: calc(var(--u) * 7); image-rendering: pixelated; }
+.radial .why { position: absolute; transform: translate(-50%, 0); white-space: nowrap; font-size: calc(var(--u) * 6); padding: 0 calc(var(--u) * 3); }
+.foodrow { display: flex; gap: calc(var(--u) * 2); position: absolute; transform: translate(-50%, 0); pointer-events: auto; }
+.foodrow .btn { font-size: calc(var(--u) * 6); }
+
+/* Avisos */
+.toasts { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + var(--u) * 26); transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 2); align-items: center; pointer-events: none; width: 92vw; }
+.toast { padding: calc(var(--u) * 1) calc(var(--u) * 4); font-size: calc(var(--u) * 7); text-align: center; animation: toast-in 0.3s ease-out both; max-width: 100%; }
+.toast.out { animation: toast-out 0.4s ease-in both; }
+@keyframes toast-in { from { transform: translateY(-40%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toast-out { to { transform: translateY(-30%); opacity: 0; } }
+
+/* Ficha del animal */
+.card .head { display: flex; gap: calc(var(--u) * 4); align-items: center; }
+.card .portrait { image-rendering: pixelated; width: calc(var(--u) * 64 * 1.5); height: calc(var(--u) * 56 * 1.5); flex: 0 0 auto; }
+.card .name { font-size: calc(var(--u) * 11); color: var(--wood-dark); }
+.card .meta { font-size: calc(var(--u) * 7); }
+.card .bars { margin-top: calc(var(--u) * 3); display: grid; grid-template-columns: auto 1fr; gap: calc(var(--u) * 2) calc(var(--u) * 3); align-items: center; }
+.bar { height: calc(var(--u) * 5); border: calc(var(--u) * 1) solid var(--wood-dark); background: #ead9c0; position: relative; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #7fb85a; box-shadow: inset 0 calc(var(--u) * 1) 0 #c2de7a; }
+.bar.thirst i { background: #6fb2c4; box-shadow: inset 0 calc(var(--u) * 1) 0 #b5e3e0; }
+.bar.well i { background: #e86a5c; box-shadow: inset 0 calc(var(--u) * 1) 0 #f4a3a8; }
+.card .blurb { font-size: calc(var(--u) * 6.5); margin-top: calc(var(--u) * 3); color: var(--wood-dark); }
+.card .actions { display: flex; gap: calc(var(--u) * 3); justify-content: center; margin-top: calc(var(--u) * 4); }
+.card input { font: inherit; font-size: calc(var(--u) * 9); width: 100%; border: calc(var(--u) * 1) solid var(--wood-dark); background: #fff4dc; padding: calc(var(--u) * 1) calc(var(--u) * 2); }

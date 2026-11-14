@@ -4,8 +4,7 @@ import { loadZone, type ZoneAssets, type SpriteRef } from './engine/assets.ts';
 import { boxBehind, screenToWorld, TILE, type Box } from './engine/iso.ts';
 import { attachInput } from './engine/input.ts';
 import { findPath, nearestWalkable, type Grid } from './world/path.ts';
-import { Player, Animal, type Drawable } from './world/entities.ts';
-import { makeLook } from './sprites/breeds.ts';
+import { Player, Animal, dirFromDelta, type Drawable } from './world/entities.ts';
 import { DEFAULT_OUTFIT } from './sprites/player.ts';
 import { gradeAt, weatherGrade, type Grade } from './fx/daylight.ts';
 import { Lighting, type LightSrc } from './fx/lighting.ts';
@@ -13,6 +12,30 @@ import { Ambient, type Weather } from './fx/ambient.ts';
 import { pixelEllipse, rgb } from './fx/pixel.ts';
 import { heart, alert, zzz, note } from './fx/sprites.ts';
 import { PALETTE } from './gfx/palette.ts';
+import { Population, type Entry } from './world/population.ts';
+import { generateAnimal, hearts, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
+
+export interface WorldState {
+  animals: AnimalData[];
+  inventory: Partial<Record<FoodId, number>>;
+  stats: Record<string, number>;
+  nextSeed: number;
+}
+
+/** Rincones acogedores de la plaza donde los animales se quedan a dormir. */
+export const HOMES: [number, number][] = [[17, 9], [8, 18], [16, 17], [6, 9], [12, 5], [18, 13], [5, 13], [10, 18], [14, 5]];
+export const ZONE_CAP = 7;
+
+export function newWorld(seed: number): WorldState {
+  return { animals: [], inventory: {}, stats: {}, nextSeed: seed };
+}
+
+export interface GameEvents {
+  animalTap(e: Entry, cssX: number, cssY: number): void;
+  groundTap(): void;
+  toast(msg: string): void;
+  care(e: Entry, act: Action, res: ActionResult): void;
+}
 
 interface StaticObj extends Drawable {
   sprite: SpriteRef;
@@ -34,7 +57,13 @@ export class Game {
   zone!: ZoneAssets;
   grid!: Grid;
   player!: Player;
-  animals: Animal[] = [];
+  pop!: Population;
+  world: WorldState = newWorld(1);
+  events: GameEvents = { animalTap: () => {}, groundTap: () => {}, toast: () => {}, care: () => {} };
+  pending: { e: Entry; act: Action; food: FoodId; repath: number } | null = null;
+  get animals(): Animal[] {
+    return this.pop.entries.map((e) => e.ent);
+  }
   objects: StaticObj[] = [];
   lights: LightSrc[] = [];
   ambient!: Ambient;
@@ -99,8 +128,15 @@ export class Game {
     }
     // personaje y animales
     this.player = new Player(m.spawn[0], m.spawn[1], this.grid, { ...DEFAULT_OUTFIT });
-    this.animals.push(new Animal('Nemesio', makeLook('europeo', 0, 1), 13, 13, this.grid));
-    this.animals.push(new Animal('Lucáreo', makeLook('galgo', 0, 2), 9, 14, this.grid));
+    this.pop = new Population(this.grid, {
+      care: (e, act, res) => this.events.care(e, act, res),
+      toast: (m) => this.events.toast(m),
+      sock: (e) => {
+        this.world.stats.calcetines = (this.world.stats.calcetines ?? 0) + 1;
+        this.events.toast(`¡${e.data.name} te ha robado un calcetín!`);
+      },
+    });
+    this.populate();
     this.ambient = new Ambient(m, this.bounds);
     const [fx, fy] = this.player.feet();
     this.cam.x = fx;
@@ -123,6 +159,113 @@ export class Game {
       if (document.hidden) this.running = false;
       else this.start();
     });
+  }
+
+  /** Primeros animales del barrio (Nemesio siempre está) y carga de los guardados. */
+  private populate(): void {
+    const W = this.world;
+    if (!W.animals.length) {
+      const now = Date.now();
+      const nem = generateAnimal(1, { zone: 'plaza', used: [], now, home: [13, 13] });
+      Object.assign(nem, { name: 'Nemesio', breed: 'europeo', variant: 0, personality: 'carinoso', favorite: 'atun', schedule: 'siempre', trust: 1.3, injured: false, rare: null, known: true });
+      const luc = generateAnimal(2, { zone: 'plaza', used: ['Nemesio'], now, home: [5, 16] });
+      Object.assign(luc, { name: 'Lucáreo', breed: 'galgo', variant: 0, personality: 'timido', favorite: 'galletas', schedule: 'dia', trust: 0.2, injured: true, rare: null });
+      W.animals.push(nem, luc);
+      for (let i = 0; i < 2; i++) this.spawnNew(HOMES[i], false);
+    }
+    for (const a of W.animals) if (a.zone === 'plaza') this.pop.add(a);
+  }
+
+  /** Llega un animal nuevo al barrio. */
+  spawnNew(home: [number, number], addToScene = true): Entry | null {
+    const W = this.world;
+    const seed = (W.nextSeed = (W.nextSeed * 48271 + 11) % 2147483647);
+    const h = this.hour;
+    const a = generateAnimal(seed, { zone: 'plaza', used: W.animals.map((x) => x.name), now: Date.now(), home, night: h < 7 || h > 21, fullMoon: false });
+    W.animals.push(a);
+    return addToScene ? this.pop.add(a) : null;
+  }
+
+  /** Camina hasta un tile (utilidad para pruebas y el tutorial). */
+  walkTo(tx: number, ty: number): boolean {
+    const t = nearestWalkable(this.grid, tx, ty);
+    if (!t) return false;
+    const path = findPath(this.grid, this.player.m.tx, this.player.m.ty, t[0], t[1]);
+    if (path) this.player.m.setPath(path);
+    return !!path;
+  }
+
+  /** De vez en cuando aparece alguien nuevo (con tope por zona). */
+  maybeArrival(now: number): Entry | null {
+    const st = this.world.stats;
+    const last = st.lastArrival ?? now;
+    if (!st.lastArrival) st.lastArrival = now;
+    const here = this.world.animals.filter((a) => a.zone === 'plaza').length;
+    if (here >= ZONE_CAP || now - last < 12 * 60_000) return null;
+    st.lastArrival = now;
+    const used = new Set(this.world.animals.map((a) => a.home.join(',')));
+    const home = HOMES.find((h) => !used.has(h.join(','))) ?? HOMES[Math.floor(Math.random() * HOMES.length)];
+    const e = this.spawnNew(home);
+    if (e) {
+      // llega desde la escalera de la calle de abajo
+      e.ent.m.x = 15 * TILE + 8;
+      e.ent.m.y = 19 * TILE + 8;
+    }
+    return e;
+  }
+
+  /** El jugador pide una acción sobre un animal: camina hasta él y la hace. */
+  request(e: Entry, act: Action, food: FoodId = 'pienso'): void {
+    this.pending = { e, act, food, repath: 0 };
+    this.cam.follow = true;
+  }
+
+  private handlePending(dt: number): void {
+    const P = this.pending;
+    if (!P) return;
+    const pl = this.player.m, an = P.e.ent.m;
+    const d = Math.hypot(pl.x - an.x, pl.y - an.y) / TILE;
+    // con poca confianza, la comida se deja a cierta distancia
+    const bowlAct = P.act === 'feed' || P.act === 'water';
+    const h = hearts(P.e.data);
+    const reach = bowlAct ? Math.max(1.3, comfortDistance(P.e.data) * 0.5 + 0.6) : 1.35;
+    if (d <= reach + 0.45 && (!pl.moving || d <= reach)) {
+      pl.stop();
+      pl.dir = dirTo(pl.x, pl.y, an.x, an.y, pl.dir);
+      if (bowlAct) {
+        // el cuenco se deja delante del jugador, hacia el animal
+        const k = Math.min(1, 0.9 / Math.max(d, 0.01));
+        const bx = pl.x + (an.x - pl.x) * k, by = pl.y + (an.y - pl.y) * k;
+        const z = this.grid.height[Math.floor(by / TILE) * this.grid.w + Math.floor(bx / TILE)] ?? pl.z;
+        this.pop.placeBowl(bx, by, z, P.act === 'feed' ? 'food' : 'water', P.food, P.e.data.id);
+        if (P.food !== 'pienso') {
+          const inv = this.world.inventory;
+          inv[P.food] = Math.max(0, (inv[P.food] ?? 0) - 1);
+        }
+        this.player.action = 'give';
+        this.player.actionT = 1.1;
+        if (h <= 2) this.events.toast(h <= 1 ? `Deja el cuenco y aléjate un poco: ${P.e.data.name} es desconfiado.` : `Aléjate un pasito para que ${P.e.data.name} se anime.`);
+      } else {
+        this.player.action = 'crouch';
+        this.player.actionT = 1.6;
+        this.pop.directCare(P.e, P.act);
+      }
+      this.pending = null;
+      return;
+    }
+    P.repath -= dt;
+    if (P.repath <= 0) {
+      P.repath = 0.8;
+      // ir a un punto a "reach" tiles del animal, en la línea hacia el jugador
+      const dx = pl.x - an.x, dy = pl.y - an.y, l = Math.hypot(dx, dy) || 1;
+      const tx = Math.round((an.x + (dx / l) * reach * TILE) / TILE - 0.5), ty = Math.round((an.y + (dy / l) * reach * TILE) / TILE - 0.5);
+      const t = nearestWalkable(this.grid, tx, ty);
+      if (t) {
+        const path = findPath(this.grid, pl.tx, pl.ty, t[0], t[1]);
+        if (path && path.length > 1) pl.setPath(path);
+        else if (!path) this.pending = null;
+      }
+    }
   }
 
   /** Composición fija para las capturas de revisión. */
@@ -157,15 +300,17 @@ export class Game {
     const camX = Math.round(this.cam.x - this.view.w / 2), camY = Math.round(this.cam.y - this.view.h / 2);
     const wx = bx + camX, wy = by + camY;
     // ¿animal?
-    for (const a of this.animals) {
-      const [x, y, w, h] = a.rect;
-      if (wx >= x + w * 0.2 && wx <= x + w * 0.8 && wy >= y + h * 0.3 && wy <= y + h) {
-        a.react('heart', 1.8);
-        if (a.look.shape.species === 'dog') a.play('wag');
-        else a.play('meow');
-        return;
-      }
+    // el más cercano a la cámara primero
+    const hits = this.pop.entries.filter((e) => {
+      const [x, y, w, h] = e.ent.rect;
+      return wx >= x + w * 0.15 && wx <= x + w * 0.85 && wy >= y + h * 0.25 && wy <= y + h;
+    }).sort((a, b) => b.ent.m.x + b.ent.m.y - (a.ent.m.x + a.ent.m.y));
+    if (hits.length) {
+      this.events.animalTap(hits[0], cssX, cssY);
+      return;
     }
+    this.events.groundTap();
+    this.pending = null;
     // suelo: probar alturas de mayor a menor
     const heights = [...new Set(Array.from(this.grid.height))].sort((a, b) => b - a);
     for (const h of heights) {
@@ -185,33 +330,18 @@ export class Game {
     }
   }
 
-  private wanderT = 0;
   update(dt: number): void {
     const rain = this.weather.rain > 0.3;
     this.player.update(dt, this.grid, rain);
-    // comportamiento mínimo de prueba (el de verdad llega en el hito 4)
-    this.wanderT -= dt;
-    if (this.wanderT <= 0 && !this.opts.shot) {
-      this.wanderT = 3 + Math.random() * 3;
-      const a = this.animals[Math.floor(Math.random() * this.animals.length)];
-      const r = Math.random();
-      if (r < 0.35) {
-        const t = nearestWalkable(this.grid, 5 + Math.floor(Math.random() * 13), 5 + Math.floor(Math.random() * 13));
-        if (t) {
-          const p = findPath(this.grid, a.m.tx, a.m.ty, t[0], t[1]);
-          if (p) {
-            a.m.speed = Math.random() < 0.3 ? 38 : 26;
-            a.m.setPath(p);
-          }
-        }
-      } else if (!a.m.moving) {
-        const opts = ['sit', 'lie', 'sleep', 'stretch', 'lick', 'scratch', 'idle', 'eat', 'drink'] as const;
-        const c = opts[Math.floor(Math.random() * opts.length)];
-        a.play(c);
-        if (c === 'sleep') a.react('sleep', 4);
-      }
-    }
-    for (const a of this.animals) a.update(dt, this.grid);
+    this.handlePending(dt);
+    if (!this.opts.shot) {
+      this.pop.update(dt, {
+        grid: this.grid, hour: this.hour, raining: rain, now: Date.now(),
+        player: { x: this.player.m.x, y: this.player.m.y, moving: this.player.m.moving },
+        shelters: this.zone.meta.shelters, approaching: this.pending?.e.data.id ?? null,
+      });
+    } else for (const e of this.pop.entries) e.ent.update(dt, this.grid);
+    for (const e of this.pop.entries) e.ent.bandage = e.brain.bandage > 0;
     const pf = this.player.feet();
     if (this.cam.follow) {
       const k = 1 - Math.exp(-dt * 4);
@@ -279,7 +409,7 @@ export class Game {
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
     }
-    list.push(this.player, ...this.animals, ...this.ambient.drawables);
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.ambient.drawables);
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes
     const pr = this.player.rect;
@@ -330,6 +460,10 @@ export class Game {
     }
     v.present();
   }
+}
+
+function dirTo(ax: number, ay: number, bx: number, by: number, prev: number): number {
+  return dirFromDelta(bx - ax, by - ay, prev);
 }
 
 function topoSort(list: Drawable[]): Drawable[] {

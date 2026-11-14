@@ -210,6 +210,8 @@ export class Animal implements Drawable {
   box: Box = [0, 0, 0, 0, 0, 0];
   rect: [number, number, number, number] = [0, 0, 0, 0];
   size: number;
+  /** tirita recién puesta */
+  bandage = false;
 
   constructor(name: string, look: Look, tx: number, ty: number, g: Grid) {
     this.name = name;
@@ -306,6 +308,16 @@ export class Animal implements Drawable {
         ctx.fillStyle = PALETTE[f.outline as ColorName];
         ctx.fillRect(X + e.x, Y + e.y + (big ? 1 : 0), e.near ? 2 : 1, 1);
       }
+    }
+    if (this.bandage && f.eyes.length) {
+      // tirita en la frente, junto al ojo
+      const e = f.eyes[0];
+      ctx.fillStyle = PALETTE.wood1;
+      ctx.fillRect(X + e.x - 2, Y + e.y - 4, 5, 2);
+      ctx.fillStyle = PALETTE.tan;
+      ctx.fillRect(X + e.x - 1, Y + e.y - 4, 3, 1);
+      ctx.fillStyle = PALETTE.peach;
+      ctx.fillRect(X + e.x, Y + e.y - 4, 1, 1);
     }
     this.rect = [X + camX, Y + camY, f.canvas.width, f.canvas.height];
   }
