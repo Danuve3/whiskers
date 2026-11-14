@@ -18,6 +18,10 @@ import { ambience } from './audio/ambience.ts';
 import { season as seasonOf, activeEvents, canonicalHour, type Season, type EventId } from './sim/calendar.ts';
 import { weatherAt, lerpW, skyAt, type Sky } from './sim/weather.ts';
 import { Festivities } from './fx/events.ts';
+import { newMeta, type MetaState } from './meta/controller.ts';
+import { NEIGHBORS, GIFTS, type Neighbor } from './sim/progress.ts';
+import { matrix } from './fx/sprites.ts';
+import type { Outfit } from './sprites/player.ts';
 import { Population, type Entry } from './world/population.ts';
 import { generateAnimal, hearts, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
@@ -26,6 +30,18 @@ export interface WorldState {
   inventory: Partial<Record<FoodId, number>>;
   stats: Record<string, number>;
   nextSeed: number;
+  meta: MetaState;
+}
+
+/** Portal de casa (donde aparecen los regalos), en vóxeles. */
+export const PORTAL: [number, number] = [58, 140];
+
+const NPC_OUTFITS: Record<string, Outfit> = {
+  maruxa: { skin: 'skinWarm', hair: 'mono', hairColor: 'white', top: 'rebeca', topColor: 'blue', bottom: 'falda', bottomColor: 'woodDark', shoes: 'black', hat: 'ninguno', hatColor: 'red', glasses: 'ninguna', acc: 'panuelo', accColor: 'red', bag: 'ninguna', bagColor: 'wood', umbrella: 'red' },
+  ramon: { skin: 'skin', hair: 'rapado', hairColor: 'white', top: 'jersey', topColor: 'wood', bottom: 'pantalon', bottomColor: 'grey', shoes: 'black', hat: 'boina', hatColor: 'black', glasses: 'redondas', acc: 'ninguno', accColor: 'red', bag: 'ninguna', bagColor: 'wood', umbrella: 'blue' },
+};
+export function npcOutfit(id: string): Outfit {
+  return NPC_OUTFITS[id];
 }
 
 /** Rincones acogedores de la plaza donde los animales se quedan a dormir. */
@@ -33,7 +49,7 @@ export const HOMES: [number, number][] = [[17, 9], [8, 18], [16, 17], [6, 9], [1
 export const ZONE_CAP = 7;
 
 export function newWorld(seed: number): WorldState {
-  return { animals: [], inventory: {}, stats: {}, nextSeed: seed };
+  return { animals: [], inventory: {}, stats: {}, nextSeed: seed, meta: newMeta() };
 }
 
 export interface GameEvents {
@@ -42,6 +58,9 @@ export interface GameEvents {
   toast(msg: string): void;
   care(e: Entry, act: Action, res: ActionResult): void;
   firstGesture?(): void;
+  npcTap?(nb: Neighbor): void;
+  giftTap?(i: number): void;
+  fountain?(): void;
 }
 
 interface StaticObj extends Drawable {
@@ -73,6 +92,8 @@ export class Game {
   world: WorldState = newWorld(1);
   events: GameEvents = { animalTap: () => {}, groundTap: () => {}, toast: () => {}, care: () => {} };
   pending: { e: Entry; act: Action; food: FoodId; repath: number } | null = null;
+  npcs: { nb: Neighbor; ent: Player }[] = [];
+  private fountainT = 0;
   get animals(): Animal[] {
     return this.pop.entries.map((e) => e.ent);
   }
@@ -172,6 +193,15 @@ export class Game {
       },
     });
     this.populate();
+    // vecinos: Maruxa a la puerta de la panadería y Ramón en el quiosco
+    const spots: Record<string, [number, number, number]> = { maruxa: [8, 3, 1], ramon: [16, 6, 1] };
+    for (const nb of NEIGHBORS) {
+      const sp = spots[nb.id];
+      if (!sp) continue;
+      const ent = new Player(sp[0], sp[1], this.grid, npcOutfit(nb.id));
+      ent.m.dir = sp[2];
+      this.npcs.push({ nb, ent });
+    }
     this.ambient = new Ambient(m, this.bounds);
     this.fest = new Festivities(this.fiestas, m);
     for (const l of this.fest.lights) this.lights.push(l);
@@ -340,6 +370,24 @@ export class Game {
     const camX = Math.round(this.cam.x - this.view.w / 2), camY = Math.round(this.cam.y - this.view.h / 2);
     const wx = bx + camX, wy = by + camY;
     // ¿animal?
+    // regalos en el portal
+    const portal = this.world.meta?.portal ?? [];
+    for (let i = 0; i < portal.length; i++) {
+      const g = portal[i];
+      const sx = 2 * (g.x - g.y), sy = g.x + g.y - 40;
+      if (Math.abs(wx - sx) < 7 && Math.abs(wy - sy + 3) < 7) {
+        this.events.giftTap?.(i);
+        return;
+      }
+    }
+    for (const n of this.npcs) {
+      const [x, y, w, h] = n.ent.rect;
+      if (wx >= x + w * 0.25 && wx <= x + w * 0.75 && wy >= y + h * 0.15 && wy <= y + h) {
+        n.ent.m.dir = dirTo(n.ent.m.x, n.ent.m.y, this.player.m.x, this.player.m.y, n.ent.m.dir);
+        this.events.npcTap?.(n.nb);
+        return;
+      }
+    }
     // el más cercano a la cámara primero
     const hits = this.pop.entries.filter((e) => {
       const [x, y, w, h] = e.ent.rect;
@@ -409,6 +457,14 @@ export class Game {
       });
     } else for (const e of this.pop.entries) e.ent.update(dt, this.grid);
     for (const e of this.pop.entries) e.ent.bandage = e.brain.bandage > 0;
+    for (const n of this.npcs) n.ent.update(dt, this.grid, this.weather.rain > 0.3);
+    // paseo hasta la fuente (para las misiones)
+    const fo = this.zone.meta.fountains[0];
+    this.fountainT -= dt;
+    if (fo && this.fountainT <= 0 && Math.hypot(this.player.m.x - fo.basin.cx, this.player.m.y - fo.basin.cy) < 48) {
+      this.fountainT = 300;
+      this.events.fountain?.();
+    }
     const pf = this.player.feet();
     if (this.cam.follow) {
       const k = 1 - Math.exp(-dt * 4);
@@ -468,9 +524,19 @@ export class Game {
       b.drawImage(pixelEllipse(4, 2, PALETTE.stone2), Math.round(sx - 4), Math.round(sy - 2));
       b.globalAlpha = 1;
     }
+    // regalos esperando en el portal
+    for (const g of this.world.meta?.portal ?? []) {
+      const def = GIFTS.find((d) => d.id === g.id);
+      if (!def) continue;
+      const img = matrix('gift-' + def.id, def.rows, { '.': null, ...def.key } as Parameters<typeof matrix>[2]);
+      const sx = Math.round(2 * (g.x - g.y) - camX), sy = Math.round(g.x + g.y - 40 - camY);
+      const bob = Math.round(Math.sin(performance.now() / 400 + g.x) * 1);
+      b.drawImage(pixelEllipse(4, 2, PALETTE.stone2), sx - 4, sy - 1);
+      b.drawImage(img, sx - Math.floor(img.width / 2), sy - img.height - 1 + bob);
+    }
     // sombras de contacto (dos tonos, multiplicando)
     b.globalCompositeOperation = 'multiply';
-    for (const e of [this.player, ...this.animals]) {
+    for (const e of [this.player, ...this.npcs.map((n) => n.ent), ...this.animals]) {
       const [sx, sy] = 'feet' in e ? e.feet() : e.screenPos();
       const big = e instanceof Animal ? (e.look.shape.legH > 15 ? 11 : 8) : 8;
       b.drawImage(pixelEllipse(big, Math.ceil(big / 2.5), '#b9b1cf'), Math.round(sx - camX - big), Math.round(sy - camY - Math.ceil(big / 2.5)));
@@ -484,7 +550,7 @@ export class Game {
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
     }
-    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.ambient.drawables, ...this.fest.props);
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent));
     for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes
