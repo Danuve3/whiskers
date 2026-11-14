@@ -862,10 +862,11 @@ const alphaCache = new WeakMap<SpriteRef, Uint8Array>();
 function overlapsOpaque(s: SpriteRef, r: [number, number, number, number]): boolean {
   let a = alphaCache.get(s);
   if (!a) {
+    // lienzo en memoria de CPU: leer sus píxeles no obliga a esperar a la GPU
     const c = document.createElement('canvas');
     c.width = s.w;
     c.height = s.h;
-    const x = c.getContext('2d')!;
+    const x = c.getContext('2d', { willReadFrequently: true })!;
     x.drawImage(s.img, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
     const d = x.getImageData(0, 0, s.w, s.h).data;
     a = new Uint8Array(s.w * s.h);

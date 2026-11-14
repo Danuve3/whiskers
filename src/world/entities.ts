@@ -2,6 +2,7 @@
 import { TILE, type Box } from '../engine/iso.ts';
 import { getFrames, type Clip, type Frame, type Look } from '../sprites/animals.ts';
 import { getPlayerFrames, type Outfit, type PFrame, type PlayerClip } from '../sprites/player.ts';
+import { warmPlayer } from '../sprites/workerClient.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { Grid } from './path.ts';
 import { santaHat } from '../fx/events.ts';
@@ -154,11 +155,13 @@ export class Player implements Drawable {
     this.m = new Mover(tx, ty, g);
     this.m.speed = 46;
     this.outfit = outfit;
+    warmPlayer(outfit);
   }
 
   setOutfit(o: Outfit): void {
     this.outfit = { ...o, rain: this.outfit.rain };
     this.ver++;
+    warmPlayer(this.outfit);
   }
 
   update(dt: number, g: Grid, rain: boolean): void {
@@ -303,9 +306,8 @@ export class Animal implements Drawable {
       for (const e of f.eyes) {
         const big = this.look.shape.eyeSize >= 3;
         // párpado: rellena el ojo con el pelaje de alrededor y deja una línea
-        const fur = sampleAbove(f.canvas, e.x, e.y - 2);
-        if (fur) {
-          ctx.fillStyle = fur;
+        if (e.lid) {
+          ctx.fillStyle = e.lid;
           ctx.fillRect(X + e.x, Y + e.y - 1, e.near ? 2 : 1, big ? 3 : 2);
         }
         ctx.fillStyle = PALETTE[f.outline as ColorName];
@@ -334,15 +336,3 @@ export class Animal implements Drawable {
   }
 }
 
-const sampleCache = new WeakMap<HTMLCanvasElement, ImageData>();
-function sampleAbove(c: HTMLCanvasElement, x: number, y: number): string | null {
-  let d = sampleCache.get(c);
-  if (!d) {
-    d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-    sampleCache.set(c, d);
-  }
-  if (x < 0 || y < 0 || x >= c.width || y >= c.height) return null;
-  const i = (y * c.width + x) * 4;
-  if (!d.data[i + 3]) return null;
-  return `rgb(${d.data[i]},${d.data[i + 1]},${d.data[i + 2]})`;
-}

@@ -284,17 +284,41 @@ export interface PFrame {
   eyes: { x: number; y: number }[];
 }
 
+export type RawPFrame = Omit<PFrame, 'canvas'> & { img: ImageData };
+export const PLAYER_CLIPS: PlayerClip[] = ['idle', 'walk', 'umbrella', 'crouch', 'give'];
+
 const cache = new Map<string, PFrame[]>();
+
+export function playerKey(o: Outfit, clip: PlayerClip, dir: number): string {
+  return outfitKey(o) + '|' + clip + '|' + dir;
+}
+const rawCache = new Map<string, RawPFrame[]>();
+export function hasPlayerFrames(k: string): boolean {
+  return cache.has(k) || rawCache.has(k);
+}
+export function putPlayerFrames(k: string, raw: RawPFrame[]): void {
+  if (!cache.has(k)) rawCache.set(k, raw);
+}
+function toPFrame(r: RawPFrame): PFrame {
+  const { img, ...rest } = r;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.getContext('2d')!.putImageData(img, 0, 0);
+  return { ...rest, canvas };
+}
 
 export function outfitKey(o: Outfit): string {
   return JSON.stringify(o);
 }
 
 export function getPlayerFrames(o: Outfit, clip: PlayerClip, dir: number): PFrame[] {
-  const k = outfitKey(o) + '|' + clip + '|' + dir;
+  const k = playerKey(o, clip, dir);
   let f = cache.get(k);
   if (!f) {
-    f = renderPlayer(o, clip, dir);
+    const raw = rawCache.get(k);
+    rawCache.delete(k);
+    f = raw ? raw.map(toPFrame) : renderPlayer(o, clip, dir);
     cache.set(k, f);
   }
   return f;
@@ -302,11 +326,17 @@ export function getPlayerFrames(o: Outfit, clip: PlayerClip, dir: number): PFram
 
 export function clearPlayerCache(): void {
   cache.clear();
+  rawCache.clear();
 }
 
 const W = 48, Hh = 76, OX = 24, OY = 66;
 
 function renderPlayer(o: Outfit, clip: PlayerClip, dir: number): PFrame[] {
+  return computePlayer(o, clip, dir).map(toPFrame);
+}
+
+/** Rasteriza un clip del personaje sin tocar el DOM (se puede ejecutar en un worker). */
+export function computePlayer(o: Outfit, clip: PlayerClip, dir: number): RawPFrame[] {
   const yaw = (dir * Math.PI) / 2;
   const toCam = dir === 0 || dir === 3 ? 1 : -1;
   const turn = dir === 0 || dir === 1 ? 0.38 : 0.12;
@@ -334,10 +364,6 @@ function renderPlayer(o: Outfit, clip: PlayerClip, dir: number): PFrame[] {
     }
     const m = visibleAt(r, rot(b.mouth, yaw), 2);
     if (m) stamp(img, m[0], m[1], es === 'happy' ? ['r'] : ['r'], { r: 'rose' });
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = Hh;
-    canvas.getContext('2d')!.putImageData(img, 0, 0);
-    return { canvas, ox: OX, oy: OY, dur, eyes };
+    return { img, ox: OX, oy: OY, dur, eyes };
   });
 }

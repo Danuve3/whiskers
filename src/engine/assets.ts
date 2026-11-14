@@ -38,7 +38,8 @@ export interface ZoneAssets {
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const img = new Image();
-    img.onload = () => res(img);
+    // decodificar fuera del hilo principal: así el primer dibujado no da un tirón
+    img.onload = () => void img.decode().then(() => res(img), () => res(img));
     img.onerror = () => rej(new Error('No se pudo cargar ' + src));
     img.src = src;
   });

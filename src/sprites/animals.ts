@@ -324,7 +324,8 @@ export interface Frame {
   ox: number;
   oy: number;
   dur: number;
-  eyes: { x: number; y: number; near: boolean }[];
+  /** lid: color del pelaje justo encima del ojo (para pintar el párpado al parpadear) */
+  eyes: { x: number; y: number; near: boolean; lid?: string }[];
   eyeState: EyeState;
   outline: ColorName;
   /** coronilla (para gorritos) */
@@ -337,14 +338,45 @@ export interface Look {
   coat: Coat;
 }
 
+/** Frame sin lienzo: lo que calcula el worker de sprites (ImageData transferible). */
+export type RawFrame = Omit<Frame, 'canvas'> & { img: ImageData };
+
 const cache = new Map<string, Frame[]>();
+
+export function framesKey(look: Look, clip: Clip, dir: number): string {
+  return `${look.key}|${clip}|${dir}`;
+}
+/** Frames llegados del worker, aún sin lienzo: se convierten la primera vez que se ven. */
+const rawCache = new Map<string, RawFrame[]>();
+export function hasFrames(k: string): boolean {
+  return cache.has(k) || rawCache.has(k);
+}
+/** Adopta frames calculados fuera (worker). Si ya estaban, se ignoran. */
+export function putFrames(k: string, raw: RawFrame[]): void {
+  if (!cache.has(k)) rawCache.set(k, raw);
+}
+function toFrame(r: RawFrame): Frame {
+  const { img, ...rest } = r;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.getContext('2d')!.putImageData(img, 0, 0);
+  return { ...rest, canvas };
+}
+/** Clips que se preparan de antemano para cada animal (los más habituales primero). */
+export function warmClips(look: Look): Clip[] {
+  const cat = look.shape.species === 'cat';
+  return ['idle', 'walk', 'sit', 'sitDown', 'standUp', 'lie', 'lieDown', 'getUp', 'sleep', 'eat', 'drink', 'trot', 'sneak', 'run', 'scratch', 'stretch', cat ? 'lick' : 'wag', 'meow'];
+}
 
 /** dir: 0 abajo-dcha (+x), 1 abajo-izq (+y), 2 arriba-izq (−x), 3 arriba-dcha (−y) */
 export function getFrames(look: Look, clip: Clip, dir: number): Frame[] {
-  const k = `${look.key}|${clip}|${dir}`;
+  const k = framesKey(look, clip, dir);
   let f = cache.get(k);
   if (!f) {
-    f = renderClip(look, clip, dir);
+    const raw = rawCache.get(k);
+    rawCache.delete(k);
+    f = raw ? raw.map(toFrame) : renderClip(look, clip, dir);
     cache.set(k, f);
   }
   return f;
@@ -359,6 +391,11 @@ function canvasSize(S: Shape): [number, number, number, number] {
 const OUTLINE_OF: Partial<Record<RampName, ColorName>> = {};
 
 export function renderClip(look: Look, clip: Clip, dir: number): Frame[] {
+  return computeClip(look, clip, dir).map(toFrame);
+}
+
+/** Rasteriza un clip completo sin tocar el DOM (se puede ejecutar en un worker). */
+export function computeClip(look: Look, clip: Clip, dir: number): RawFrame[] {
   const S = look.shape, C = look.coat;
   const yaw = (dir * Math.PI) / 2;
   const [W, H, ox, oy] = canvasSize(S);
@@ -396,13 +433,16 @@ export function renderClip(look: Look, clip: Clip, dir: number): Frame[] {
       const m = visibleAt(r, rot(built.mouth, yaw), 2.5);
       if (m) stamp(img, m[0], m[1], ['K'], { K: 'ink' });
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    canvas.getContext('2d')!.putImageData(img, 0, 0);
+    // color del párpado: el pelaje justo encima de cada ojo
+    for (const e of eyes) {
+      const sx = e.x, sy = e.y - 2;
+      if (sx < 0 || sy < 0 || sx >= W || sy >= H) continue;
+      const i = (sy * W + sx) * 4;
+      if (img.data[i + 3]) e.lid = `rgb(${img.data[i]},${img.data[i + 1]},${img.data[i + 2]})`;
+    }
     const tp = project(rot([built.head[0], built.head[1], built.head[2] + S.head[2] * 0.95], yaw));
     const top: [number, number] = [Math.round(tp[0] + ox), Math.round(tp[1] + oy)];
-    return { canvas, ox, oy, dur: fd.dur, eyes, eyeState: fd.eyes, outline: outlineColor, top };
+    return { img, ox, oy, dur: fd.dur, eyes, eyeState: fd.eyes, outline: outlineColor, top };
   });
 }
 
@@ -425,8 +465,7 @@ const warmQueue: [Look, Clip, number][] = [];
 let warming = false;
 /** Prepara en segundo plano los clips más comunes para que no haya tirones al verlos por primera vez. */
 export function warm(look: Look): void {
-  for (const clip of ['idle', 'walk', 'sit', 'sitDown', 'lie', 'lieDown', 'sleep', 'eat', 'drink', 'trot', 'sneak', 'run'] as Clip[])
-    for (let d = 0; d < 4; d++) warmQueue.push([look, clip, d]);
+  for (const clip of warmClips(look)) for (let d = 0; d < 4; d++) warmQueue.push([look, clip, d]);
   if (!warming) pump();
 }
 function pump(): void {

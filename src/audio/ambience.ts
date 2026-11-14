@@ -16,6 +16,15 @@ export class Ambience {
   private dropT = 0;
   private crickT = 0;
 
+  private targets = new WeakMap<AudioParam, number>();
+  private glide(p: AudioParam, v: number, t: number, tc: number): void {
+    const last = this.targets.get(p);
+    if (last !== undefined && Math.abs(last - v) < 0.004 && (v !== 0 || last === 0)) return;
+    this.targets.set(p, v);
+    p.cancelScheduledValues(t);
+    p.setTargetAtTime(v, t, tc);
+  }
+
   private bed(make: (out: GainNode) => void): Bed {
     const g = audio.ctx!.createGain();
     g.gain.value = 0;
@@ -79,11 +88,13 @@ export class Ambience {
     if (!this.rain) this.init();
     const t = audio.now;
     const night = s.hour < 6.5 || s.hour > 21;
-    this.rain!.gain.gain.setTargetAtTime(s.rain * 0.55, t, 1.2);
-    this.wind!.gain.gain.setTargetAtTime(0.05 + Math.abs(s.wind) * 0.12 + s.rain * 0.05, t, 2);
+    // solo se reprograma un volumen cuando cambia de verdad: llamar a setTargetAtTime en
+    // cada frame llena la cola de automatización del hilo de audio y provoca cortes
+    this.glide(this.rain!.gain.gain, s.rain * 0.55, t, 1.2);
+    this.glide(this.wind!.gain.gain, 0.05 + Math.abs(s.wind) * 0.12 + s.rain * 0.05, t, 2);
     const fv = Math.max(0, 1 - s.fountainDist / 9) ** 1.5 * 0.32;
-    this.fountain!.gain.gain.setTargetAtTime(fv, t, 0.5);
-    this.crickets!.gain.setTargetAtTime(night && s.rain < 0.2 ? 0.5 : 0, t, 2);
+    this.glide(this.fountain!.gain.gain, fv, t, 0.5);
+    this.glide(this.crickets!.gain, night && s.rain < 0.2 ? 0.5 : 0, t, 2);
     // gotas sueltas sobre toldos y charcos
     this.dropT -= dt;
     if (s.rain > 0.1 && this.dropT <= 0) {
