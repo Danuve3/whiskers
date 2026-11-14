@@ -5,7 +5,7 @@ import { boxBehind, screenToWorld, TILE, type Box } from './engine/iso.ts';
 import { attachInput } from './engine/input.ts';
 import { findPath, nearestWalkable, type Grid } from './world/path.ts';
 import { Player, Animal, type Drawable } from './world/entities.ts';
-import { SHAPES, COATS } from './sprites/animals.ts';
+import { makeLook } from './sprites/breeds.ts';
 import { DEFAULT_OUTFIT } from './sprites/player.ts';
 import { gradeAt, weatherGrade, type Grade } from './fx/daylight.ts';
 import { Lighting, type LightSrc } from './fx/lighting.ts';
@@ -99,8 +99,8 @@ export class Game {
     }
     // personaje y animales
     this.player = new Player(m.spawn[0], m.spawn[1], this.grid, { ...DEFAULT_OUTFIT });
-    this.animals.push(new Animal('Nemesio', { key: 'nemesio', shape: SHAPES.catShort, coat: COATS.tabbyBrown }, 13, 13, this.grid));
-    this.animals.push(new Animal('Lucáreo', { key: 'lucareo', shape: SHAPES.galgo, coat: COATS.galgoFawn }, 9, 14, this.grid));
+    this.animals.push(new Animal('Nemesio', makeLook('europeo', 0, 1), 13, 13, this.grid));
+    this.animals.push(new Animal('Lucáreo', makeLook('galgo', 0, 2), 9, 14, this.grid));
     this.ambient = new Ambient(m, this.bounds);
     const [fx, fy] = this.player.feet();
     this.cam.x = fx;

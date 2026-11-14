@@ -115,6 +115,10 @@ function buildPlayer(o: Outfit, P: PPose): { prims: Prim[]; eyes: V3[]; mouth: V
   prims.push(ell(torsoC, 4.9 * br, 6.3, 7.6 * br, PREG.TOP, 2));
   if (long) prims.push(ell([0, 0, hipZ + 1], 5.4, 6.6, 4.5, PREG.TOP, 2));
   if (o.top === 'peto') prims.push(ell([0.6, 0, hipZ + 6], 4.6, 5.4, 5, PREG.BOTTOM, 2));
+  if (o.top === 'rebeca') {
+    // rebeca abierta: camisa clara en el centro y botones
+    prims.push(ell([3.2, 0, hipZ + 8.5], 2.2, 2.4, 7, PREG.ACCENT, 2));
+  }
   // mochila o bandolera
   if (o.bag === 'mochila') prims.push(ell([-5.2, 0, hipZ + 10], 3.2, 5, 5.8, PREG.BAG, 8));
   if (o.bag === 'bandolera') {

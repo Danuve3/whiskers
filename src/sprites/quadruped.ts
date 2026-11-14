@@ -38,6 +38,8 @@ export interface Shape {
   fluff: number;
   eyeSize: 1 | 2 | 3;
   jowls?: boolean;
+  /** pompones de caniche */
+  pompom?: boolean;
 }
 
 export interface Pose {
@@ -88,6 +90,8 @@ export function basePose(): Pose {
 
 export interface Built {
   prims: Prim[];
+  /** frente (para marcas especiales) */
+  brow?: V3;
   eyes: V3[]; // [cerca, lejos]
   nose: V3;
   mouth: V3;
@@ -174,6 +178,8 @@ export function buildQuad(S: Shape, P: Pose): Built {
   const mouth = hrot([S.snoutLen + S.snout[0] * 0.6, 0, -S.stop - S.snout[2] * 0.8]);
   const eyeX = S.head[0] * 0.78, eyeY = S.head[1] * 0.5, eyeZ = S.head[2] * 0.22;
   const eyes = [hrot([eyeX, eyeY, eyeZ]), hrot([eyeX, -eyeY, eyeZ])];
+  const brow = hrot([S.head[0] * 0.7, 0, S.head[2] * 0.7]);
+  if (S.pompom) prims.push(sphere(hrot([-S.head[0] * 0.2, 0, S.head[2] * 0.95]), S.head[0] * 0.75, REG.FUR, PART.HEAD));
 
   // orejas
   const es = S.earSize;
@@ -197,9 +203,13 @@ export function buildQuad(S: Shape, P: Pose): Built {
       capsule(prims, b, t, es * 0.32, 0.5, REG.FUR, part);
     } else if (S.ear === 'drop' || S.ear === 'long' || S.ear === 'fold') {
       const drop = S.ear === 'long' ? 1.6 : S.ear === 'fold' ? 0.5 : 1;
-      const b = hrot([-S.head[0] * 0.1, side * S.head[1] * 0.8, S.head[2] * 0.5]);
-      const t = hrot([S.head[0] * 0.05 - back * es * 0.4, side * (S.head[1] * 0.98), S.head[2] * 0.5 - es * drop + tw * 0.4]);
-      capsule(prims, b, t, es * 0.4, es * 0.45, REG.FUR, part);
+      // oreja caída: un faldón fino pegado a la mejilla
+      const top: V3 = [-S.head[0] * 0.15, side * S.head[1] * 0.92, S.head[2] * 0.45];
+      const bot: V3 = [S.head[0] * 0.02 - back * es * 0.4, side * (S.head[1] * 1.0), S.head[2] * 0.45 - es * drop + tw * 0.4];
+      const mid = hrot(lerp(top, bot, 0.5));
+      const len = Math.hypot(bot[0] - top[0], bot[2] - top[2]);
+      const tilt = Math.atan2(bot[0] - top[0], top[2] - bot[2]);
+      prims.push(ell(mid, es * 0.36, 1.1, len * 0.62, REG.FUR, part, hy, -hp + tilt, hr));
     }
   }
 
@@ -243,12 +253,13 @@ export function buildQuad(S: Shape, P: Pose): Built {
     capsule(prims, root, knee, S.legR[0] * F, S.legR[0] * 0.85 * F, reg, L.part, bias);
     capsule(prims, knee, foot, S.legR[0] * 0.8 * F, S.legR[1] * F, reg, L.part, bias);
     prims.push(ell(add(foot, [S.paw * 0.35, 0, S.paw * 0.35]), S.paw * 1.05, S.paw * 0.85, S.paw * 0.6, REG.PAW, L.part, 0, 0, 0, bias));
+    if (S.pompom) prims.push(sphere(lerp(foot, knee, 0.35), S.legR[0] * 1.55, REG.FUR, L.part, bias));
   }
 
   // cola: cadena con movimiento secundario
   tail(prims, S, P, add(hip, rot([-S.hips[0] * 0.8, 0, S.hips[2] * 0.35], 0, pitch)));
 
-  return { prims, eyes, nose, mouth, head: headC };
+  return { prims, eyes, nose, mouth, head: headC, brow };
 }
 
 function lerp(a: V3, b: V3, t: number): V3 {
@@ -284,10 +295,11 @@ function tail(prims: Prim[], S: Shape, P: Pose, base: V3): void {
     const step = L / n;
     const dir: V3 = [-Math.cos(ang) * Math.cos(side), Math.sin(side) * 1.0, Math.sin(ang) * Math.cos(side)];
     const q = add(p, mul(dir, step));
-    const r = S.tailR * (S.tail === 'fluffy' || S.tail === 'plume' ? 1.25 + 0.3 * Math.sin(t * Math.PI) : S.tail === 'whip' ? 1 - t * 0.6 : S.tail === 'otter' ? 1.4 - t * 0.8 : 1 - t * 0.35);
-    capsule(prims, p, q, r * (1 + S.fluff * 0.15), r * 0.92, REG.FUR, PART.TAIL);
+    const r = S.tailR * (S.tail === 'fluffy' || S.tail === 'plume' ? 1.05 + 0.3 * Math.sin(t * Math.PI) : S.tail === 'whip' ? 1 - t * 0.6 : S.tail === 'otter' ? 1.4 - t * 0.8 : 1 - t * 0.35);
+    capsule(prims, p, q, r * (1 + S.fluff * 0.08), r * 0.92, REG.FUR, PART.TAIL);
     p = q;
   }
+  if (S.pompom) prims.push(sphere(p, S.tailR * 1.7, REG.FUR, PART.TAIL));
 }
 
 /** Pose de dormir enroscado: cuerpo en rosquilla, cabeza sobre las patas, cola alrededor. */

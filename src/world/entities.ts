@@ -148,22 +148,31 @@ export class Player implements Drawable {
   box: Box = [0, 0, 0, 0, 0, 0];
   rect: [number, number, number, number] = [0, 0, 0, 0];
 
+  private ver = 0;
   constructor(tx: number, ty: number, g: Grid, outfit: Outfit) {
     this.m = new Mover(tx, ty, g);
     this.m.speed = 46;
     this.outfit = outfit;
   }
 
+  setOutfit(o: Outfit): void {
+    this.outfit = { ...o, rain: this.outfit.rain };
+    this.ver++;
+  }
+
   update(dt: number, g: Grid, rain: boolean): void {
     this.m.update(dt, g);
-    if (this.outfit.rain !== rain) this.outfit = { ...this.outfit, rain };
+    if (this.outfit.rain !== rain) {
+      this.outfit = { ...this.outfit, rain };
+      this.ver++;
+    }
     let clip: PlayerClip = this.m.moving ? 'walk' : rain ? 'umbrella' : 'idle';
     if (this.action && !this.m.moving) {
       clip = this.action;
       this.actionT -= dt;
       if (this.actionT <= 0) this.action = null;
     }
-    this.anim.set(clip + this.m.dir + (rain ? 'r' : ''), getPlayerFrames(this.outfit, clip, this.m.dir), true);
+    this.anim.set(clip + this.m.dir + '|' + this.ver, getPlayerFrames(this.outfit, clip, this.m.dir), true);
     this.anim.update(dt);
     const { x, y, z } = this.m;
     this.box = [x - 4, y - 4, z, x + 4, y + 4, z + 50];

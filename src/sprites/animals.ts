@@ -3,22 +3,8 @@ import type { ColorName, RampName } from '../gfx/palette.ts';
 import { place, rasterize, clean, outline, toImageData, visibleAt, stamp, rot, type V3, type Raster } from './rig.ts';
 import { buildQuad, basePose, REG, PART, type Shape, type Pose } from './quadruped.ts';
 
-// ---------------------------------------------------------------- Siluetas base
-export const SHAPES: Record<string, Shape> = {
-  catShort: {
-    species: 'cat', legH: 8.5, bodyLen: 10, chest: [6, 5.2, 5.8], hips: [6.2, 5.4, 6], belly: [7.6, 5.2, 5.4], tuck: 0.2,
-    neckLen: 5, neckR: 3.8, neckAngle: 1.05, head: [6.6, 7.2, 6.3], snout: [2.2, 3.0, 1.9], snoutLen: 5.6, stop: 1.9,
-    ear: 'cat', earSize: 6.2, tail: 'cat', tailLen: 15, tailR: 1.9, legR: [2.3, 1.9], paw: 2.2, legSpread: 2.9, fluff: 0, eyeSize: 3,
-  },
-  galgo: {
-    species: 'dog', legH: 23, bodyLen: 21, chest: [8.5, 5, 8.2], hips: [6.8, 4.4, 5], belly: [9, 3.6, 3.4], tuck: 2.6,
-    neckLen: 9, neckR: 2.9, neckAngle: 0.62, head: [4.6, 3.3, 3.7], snout: [5.2, 2.0, 2.0], snoutLen: 6.2, stop: 1.0,
-    ear: 'rose', earSize: 4.4, tail: 'whip', tailLen: 22, tailR: 1.25, legR: [2.0, 1.15], paw: 1.6, legSpread: 2.8, fluff: 0, eyeSize: 2,
-  },
-};
-
 // ---------------------------------------------------------------- Pelajes
-export type Pattern = 'solid' | 'tabby' | 'bicolor' | 'tuxedo' | 'calico' | 'tortie' | 'point' | 'spots' | 'brindle' | 'saddle';
+export type Pattern = 'solid' | 'tabby' | 'bicolor' | 'tuxedo' | 'calico' | 'tortie' | 'point' | 'spots' | 'brindle' | 'saddle' | 'blackTan' | 'tricolor' | 'patches';
 
 export interface Coat {
   base: RampName;
@@ -31,14 +17,20 @@ export interface Coat {
   whiteChest: boolean;
   socks: boolean;
   eye: ColorName;
+  /** heterocromía: color del ojo lejano */
+  eye2?: ColorName;
   nose: ColorName;
   seed: number;
+  /** tercer color (manchas de bodeguero) */
+  third?: RampName;
+  /** textura del pelo */
+  tex?: 'curly' | 'shaggy' | 'wrinkle';
+  /** máscara oscura (hocico y orejas) */
+  mask?: boolean;
+  /** punta de la cola blanca */
+  tailTip?: boolean;
+  special?: 'moon';
 }
-
-export const COATS: Record<string, Coat> = {
-  tabbyBrown: { base: 'wood', second: 'woodDark', light: 'white', pattern: 'tabby', whiteChest: true, socks: false, eye: 'veg4', nose: 'pink', seed: 1 },
-  galgoFawn: { base: 'fawn', second: 'wood', light: 'white', pattern: 'solid', whiteChest: true, socks: true, eye: 'ink', nose: 'ink', seed: 2 },
-};
 
 function n3(x: number, y: number, z: number, s: number): number {
   let h = (Math.floor(x) * 374761393 + Math.floor(y) * 668265263 + Math.floor(z) * 2147483647 + s * 1442695041) | 0;
@@ -59,8 +51,28 @@ function smooth3(x: number, y: number, z: number, s: number): number {
   return v;
 }
 
+type PaintOut = { ramp: RampName; shift?: number; color?: ColorName } | null;
+
 function painter(S: Shape, C: Coat, yaw: number) {
-  return (reg: number, part: number, hit: V3, n: V3): { ramp: RampName; shift?: number; color?: ColorName } | null => {
+  const inner = basePainter(S, C, yaw);
+  return (reg: number, part: number, hit: V3, n: V3): PaintOut => {
+    const p = rot(hit, -yaw);
+    let out = inner(reg, part, hit, n);
+    if (!out) return out;
+    const isEar = part === PART.EAR_L || part === PART.EAR_R;
+    if (C.mask && (reg === REG.MUZZLE || (isEar && reg === REG.FUR))) out = { ramp: C.second };
+    if (C.tailTip && part === PART.TAIL && p[2] > S.legH + S.chest[2] && p[0] < -S.bodyLen * 0.5 - S.tailLen * 0.55) out = { ramp: C.light };
+    if (reg === REG.FUR || reg === REG.BELLY || reg === REG.MUZZLE) {
+      if (C.tex === 'curly' && smooth3(p[0] * 0.9, p[1] * 0.9, p[2] * 0.9, C.seed + 5) > 0.6) out = { ...out, shift: (out.shift ?? 0) - 1 };
+      if (C.tex === 'shaggy' && n3(p[0] * 0.7, p[1] * 1.6, p[2] * 0.35, C.seed + 9) > 0.86) out = { ...out, shift: (out.shift ?? 0) - 1 };
+      if (C.tex === 'wrinkle' && (part === PART.HEAD || (part === PART.BODY && p[0] > S.bodyLen * 0.35)) && Math.sin(p[2] * 2.4) > 0.9) out = { ...out, shift: (out.shift ?? 0) - 1 };
+    }
+    return out;
+  };
+}
+
+function basePainter(S: Shape, C: Coat, yaw: number) {
+  return (reg: number, part: number, hit: V3, n: V3): PaintOut => {
     void n;
     const p = rot(hit, -yaw); // a espacio local del animal
     const isLeg = part >= PART.LEG_FL && part <= PART.LEG_HR;
@@ -107,13 +119,40 @@ function painter(S: Shape, C: Coat, yaw: number) {
         return { ramp: C.base };
       }
       case 'spots': {
-        const v = smooth3(p[0] * 0.5, p[1] * 0.5, p[2] * 0.5, C.seed);
-        if (v > 0.68 && !isLeg) return { ramp: C.second };
+        // rosetas: anillo oscuro con centro algo más oscuro que la base
+        const v = smooth3(p[0] * 0.75, p[1] * 0.75, p[2] * 0.75, C.seed);
+        if (part === PART.HEAD && p[2] < S.legH + S.chest[2] + S.head[2] * 0.4) return { ramp: C.base };
+        if (v > 0.66) return { ramp: C.base, shift: -1 };
+        if (v > 0.56) return { ramp: C.second };
         return { ramp: C.base };
       }
       case 'brindle': {
-        const s = Math.sin(p[0] * 1.6 + smooth3(p[0] * 0.3, p[1] * 0.3, p[2] * 0.3, C.seed) * 6);
-        return { ramp: s > 0.7 ? C.second : C.base };
+        // atigrado: rayas verticales finas y algo onduladas, solo en tronco y muslos
+        if (part === PART.HEAD || part === PART.SNOUT || part === PART.TAIL || (isLeg && p[2] < S.legH * 0.6)) return { ramp: C.base };
+        const s = Math.sin(p[0] * 1.9 + Math.sin(p[2] * 0.45 + C.seed) * 1.6);
+        return { ramp: s > 0.82 ? C.second : C.base };
+      }
+      case 'blackTan': {
+        // negro con fuego: cejas, mejillas, pecho y patas
+        if (isLeg && p[2] < S.legH * 0.55) return { ramp: C.second };
+        if (part === PART.BODY && p[2] < S.legH + S.chest[2] * 0.2 && p[0] > 0) return { ramp: C.second };
+        return { ramp: C.base };
+      }
+      case 'tricolor': {
+        if (isLeg && p[2] < S.legH * 0.7) return { ramp: C.light };
+        if (part === PART.BODY && p[2] > S.legH + S.chest[2] * 0.25 && p[0] < S.bodyLen * 0.35) return { ramp: C.second };
+        if (part === PART.HEAD && Math.abs(p[1]) < S.head[1] * 0.18 && p[2] > S.legH + S.chest[2] + S.head[2] * 0.2) return { ramp: C.light };
+        return { ramp: C.base };
+      }
+      case 'patches': {
+        // bodeguero: blanco con cabeza tricolor y una mancha en la grupa
+        if (part === PART.HEAD || part === PART.EAR_L || part === PART.EAR_R) {
+          const v = smooth3(p[0] * 0.5, p[1] * 0.5, p[2] * 0.5, C.seed);
+          if (Math.abs(p[1]) < S.head[1] * 0.2 && p[2] > S.legH + S.chest[2]) return { ramp: C.base };
+          return { ramp: v > 0.5 ? C.second : C.third ?? C.second };
+        }
+        if (part === PART.BODY && p[0] < -S.bodyLen * 0.25 && p[2] > S.legH + 1 && smooth3(p[0] * 0.25, p[1] * 0.25, p[2] * 0.25, C.seed + 3) > 0.45) return { ramp: C.second };
+        return { ramp: C.base };
       }
       case 'saddle': {
         if (p[2] > S.legH + 2 && part !== PART.HEAD && part !== PART.NECK && !isLeg && part !== PART.TAIL) return { ramp: C.second };
@@ -343,6 +382,11 @@ export function renderClip(look: Look, clip: Clip, dir: number): Frame[] {
     });
     const outlineColor: ColorName = (OUTLINE_OF[C.base] ??= rampOutline(C.base));
     drawEyes(img, eyes, fd.eyes, S, C, outlineColor);
+    // marca de luna creciente en la frente (gato lunar)
+    if (C.special === 'moon' && built.brow) {
+      const b = visibleAt(r, rot(built.brow, yaw), 2.5);
+      if (b) stamp(img, b[0] - 1, b[1] - 1, ['.b', 'b.', '.b'], { b: 'butter', '.': null });
+    }
     // nariz
     const nose = visibleAt(r, rot(built.nose, yaw), 2);
     if (nose && pose.curl === 0) stamp(img, nose[0], nose[1], S.species === 'cat' ? ['n'] : ['nn'], { n: C.nose });
@@ -367,6 +411,7 @@ export function drawEyes(img: ImageData, eyes: Frame['eyes'], st: EyeState, S: S
   for (const e of eyes) {
     const set = e.near ? (S.eyeSize >= 3 ? EYES.nearBig : EYES.near) : S.eyeSize >= 3 ? EYES.farBig : EYES.far;
     const rows = set[st];
-    stamp(img, e.x - (e.near ? 0 : 0), e.y - 1, rows, { K: 'ink', w: 'cal4', I: C.eye, o: lid, '.': null });
+    const iris = !e.near && C.eye2 ? C.eye2 : C.eye;
+    stamp(img, e.x, e.y - 1, rows, { K: 'ink', w: 'cal4', I: iris, o: lid, '.': null });
   }
 }

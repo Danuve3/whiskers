@@ -1,6 +1,7 @@
 // Galería de desarrollo: razas, animaciones, personaje y props sobre suelo real, ×1 y ×3, día y noche.
 import '../styles.css';
-import { getFrames, SHAPES, COATS, type Clip, type Look } from '../sprites/animals.ts';
+import { getFrames, type Clip, type Look } from '../sprites/animals.ts';
+import { BREEDS, makeLook } from '../sprites/breeds.ts';
 import { loadZone, type ZoneAssets } from '../engine/assets.ts';
 import { getPlayerFrames, DEFAULT_OUTFIT, type PlayerClip } from '../sprites/player.ts';
 
@@ -12,8 +13,8 @@ document.documentElement.style.height = 'auto';
 document.body.style.height = 'auto';
 
 const LOOKS: Look[] = [
-  { key: 'tabby', shape: SHAPES.catShort, coat: COATS.tabbyBrown },
-  { key: 'galgo', shape: SHAPES.galgo, coat: COATS.galgoFawn },
+  { ...makeLook('europeo', 0, 1), key: 'tabby' },
+  { ...makeLook('galgo', 0, 2), key: 'galgo' },
 ];
 const CLIPS: Clip[] = ['idle', 'walk', 'trot', 'run', 'sneak', 'sitDown', 'sit', 'lieDown', 'lie', 'sleep', 'stretch', 'lick', 'scratch', 'eat', 'drink', 'wag', 'meow'];
 const PCLIPS: PlayerClip[] = ['idle', 'walk', 'crouch', 'give', 'umbrella'];
@@ -84,6 +85,37 @@ async function main() {
   const scales = (params.get('scale') ?? '3,1').split(',').map(Number);
   const clipList = clipsParam ? (clipsParam.split(',') as Clip[]) : CLIPS;
   const night = params.get('noche') !== '0';
+  // ---- catálogo de razas: todas las variantes, de frente y de espaldas
+  if (only === 'razas' || only === 'gatos' || only === 'perros') {
+    const sp = only === 'gatos' ? 'cat' : only === 'perros' ? 'dog' : null;
+    const scale = Number(params.get('scale') ?? 3);
+    const clip = (params.get('clip') ?? 'idle') as Clip;
+    const row = section(`razas · ${clip} · ×${scale}`);
+    for (const b of BREEDS) {
+      if (sp && b.species !== sp) continue;
+      b.coats.forEach((_, v) => {
+        const look = makeLook(b.id, v, 3 + v);
+        const big = b.shape.legH > 15 ? 1 : 0;
+        for (const dir of [0, 1, 3]) addCell(row, `${b.name} · ${b.coatNames[v]}`.slice(0, 26) + (dir ? '' : ''), () => getFrames(look, clip, dir), 72 + big * 24, 76 + big * 20, scale, false);
+      });
+    }
+    if (sp === 'cat' || !sp) {
+      const rr = section('raros');
+      for (const [id, rare] of [['europeo', 'heterocromia'], ['calico', 'calicoMacho'], ['azulruso', 'lunar'], ['bicolor', 'heterocromia']] as const) {
+        const look = makeLook(id, 0, 9, rare);
+        addCell(rr, `${id} · ${rare}`, () => getFrames(look, clip, 0), 72, 76, scale, true);
+      }
+    }
+  }
+  if (only === 'fila') {
+    // alineación de tamaños junto al personaje
+    const row = section('tamaños ×2');
+    addCell(row, 'personaje', () => getPlayerFrames(DEFAULT_OUTFIT, 'idle', 0), 48, 100, 2, false);
+    for (const b of BREEDS) {
+      const look = makeLook(b.id, 0, 4);
+      addCell(row, b.name.slice(0, 12), () => getFrames(look, 'idle', 0), b.shape.legH > 15 ? 100 : 72, 100, 2, false);
+    }
+  }
   for (const look of LOOKS) {
     if (only && only !== look.key) continue;
     for (const scale of scales) {

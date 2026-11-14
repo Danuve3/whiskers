@@ -1,0 +1,345 @@
+// Arte de la interfaz dibujado a mano: marcos 9-slice (madera clara, papel, botones) e iconos 16×16.
+import { PALETTE, type ColorName } from '../gfx/palette.ts';
+
+type Key = Record<string, ColorName | null>;
+
+function toCanvas(rows: string[], key: Key): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = Math.max(...rows.map((r) => r.length));
+  c.height = rows.length;
+  const x = c.getContext('2d')!;
+  rows.forEach((r, j) => {
+    for (let i = 0; i < r.length; i++) {
+      const col = key[r[i]];
+      if (!col) continue;
+      x.fillStyle = PALETTE[col];
+      x.fillRect(i, j, 1, 1);
+    }
+  });
+  return c;
+}
+
+const urlCache = new Map<string, string>();
+export function dataURL(name: string, rows: string[], key: Key): string {
+  let u = urlCache.get(name);
+  if (!u) {
+    u = toCanvas(rows, key).toDataURL();
+    urlCache.set(name, u);
+  }
+  return u;
+}
+
+// ---------------------------------------------------------------- Marcos (9-slice de 6 px)
+// Panel: marco de madera clara con esquinas reforzadas y clavos, interior de papel crema.
+const PANEL = [
+  '..oooooooooooooooo..',
+  '.oLLLLLLLLLLLLLLLLo.',
+  'oLHhLLLLLLLLLLLLhHLo',
+  'oLhnhwwwwwwwwwwhnhLo',
+  'oLLhwppppppppppwhLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLwppppppppppppwLLo',
+  'oLLhwppppppppppwhLLo',
+  'oLhnhsssssssssshnhLo',
+  'oDHhDDDDDDDDDDDDhHDo',
+  '.oDDDDDDDDDDDDDDDDo.',
+  '..oooooooooooooooo..',
+];
+const PANEL_KEY: Key = { '.': null, o: 'wood0', L: 'wood4', H: 'cal4', h: 'wood3', n: 'wood1', D: 'wood3', w: 'cal3', p: 'cal4', s: 'cal2' };
+
+const BTN = [
+  '.oooooooooo.',
+  'oHHHHHHHHHHo',
+  'oHLLLLLLLLho',
+  'oHLLLLLLLLho',
+  'oHLLLLLLLLho',
+  'oHLLLLLLLLho',
+  'oHLLLLLLLLho',
+  'ohhhhhhhhhho',
+  'oDDDDDDDDDDo',
+  '.oooooooooo.',
+];
+const BTN_KEY: Key = { '.': null, o: 'wood0', H: 'cal4', L: 'wood4', h: 'wood3', D: 'wood2' };
+const BTN_ON_KEY: Key = { '.': null, o: 'wood0', H: 'butter', L: 'mustard', h: 'wood3', D: 'wood2' };
+const BTN_DOWN = [
+  '.oooooooooo.',
+  'oDDDDDDDDDDo',
+  'ohhhhhhhhhho',
+  'ohLLLLLLLLHo',
+  'ohLLLLLLLLHo',
+  'ohLLLLLLLLHo',
+  'ohLLLLLLLLHo',
+  'ohLLLLLLLLHo',
+  'oHHHHHHHHHHo',
+  '.oooooooooo.',
+];
+
+export function frames(): Record<string, { url: string; slice: number }> {
+  return {
+    panel: { url: dataURL('panel', PANEL, PANEL_KEY), slice: 6 },
+    btn: { url: dataURL('btn', BTN, BTN_KEY), slice: 4 },
+    btnOn: { url: dataURL('btnOn', BTN, BTN_ON_KEY), slice: 4 },
+    btnDown: { url: dataURL('btnDown', BTN_DOWN, BTN_KEY), slice: 4 },
+  };
+}
+
+// ---------------------------------------------------------------- Iconos 16×16 (contorno de tinta)
+const IK: Key = {
+  '.': null, k: 'ink', w: 'cal4', c: 'cal3', b: 'wood3', B: 'wood2', d: 'wood1', r: 'coral', R: 'rose', p: 'pink', y: 'mustard', Y: 'butter',
+  g: 'veg3', G: 'veg2', s: 'sky', S: 'water2', l: 'lilac', L: 'plum', o: 'tile3', O: 'tile2', n: 'stone2', N: 'stone1', m: 'stone3',
+};
+
+export const ICONS: Record<string, string[]> = {
+  album: [
+    '................',
+    '..kkkkkkkkkkk...',
+    '.krrrrrrrrrrrk..',
+    '.krRRRRRRRRRrk..',
+    '.krRwwwwwwwRrk..',
+    '.krRwpp.ppwRrk..',
+    '.krRwpppppwRrk..',
+    '.krRwwpppwwRrk..',
+    '.krRwwwpwwwRrk..',
+    '.krRwwwwwwwRrk..',
+    '.krRRRRRRRRRrk..',
+    '.krrrrrrrrrrrk..',
+    '.kcccccccccccck.',
+    '.kwwwwwwwwwwwwk.',
+    '..kkkkkkkkkkkk..',
+    '................',
+  ],
+  logros: [
+    '................',
+    '...kkkkkkkkkk...',
+    '..kYyyyyyyyyyk..',
+    'kkkYyyyyyyyyykkk',
+    'kykYyyyyyyyyykyk',
+    'kykYyyywwyyyykyk',
+    '.kkYyyywyyyyykk.',
+    '...kyyyyyyyyyk..',
+    '....kyyyyyyyk...',
+    '.....kkyyykk....',
+    '.......kyk......',
+    '.......kyk......',
+    '.....kkkkkkk....',
+    '....kbbbbbbbk...',
+    '....kkkkkkkkk...',
+    '................',
+  ],
+  misiones: [
+    '................',
+    '..kkkkkkkkkkk...',
+    '.kwwwwwwwwwwwk..',
+    '.kwkkwwwwwwwwk..',
+    '.kwgkwkkkkkwwk..',
+    '.kwwwwwwwwwwwk..',
+    '.kwkkwwwwwwwwk..',
+    '.kwgkwkkkkkkwk..',
+    '.kwwwwwwwwwwwk..',
+    '.kwkkwwwwwwwwk..',
+    '.kwwkwkkkkwwwk..',
+    '.kwwwwwwwwwwwk..',
+    '.kcccccccccccck.',
+    '..kkkkkkkkkkkk..',
+    '................',
+    '................',
+  ],
+  armario: [
+    '................',
+    '.......kk.......',
+    '......k..k......',
+    '.........k......',
+    '........k.......',
+    '.......k........',
+    '......kbk.......',
+    '....kkbbbkk.....',
+    '...kbbbbbbbk....',
+    '..kbbbbbbbbbk...',
+    '.kbbbBBBBBbbbk..',
+    'kbbBBkkkkkBBbbk.',
+    'kBBkk.....kkBBk.',
+    '.kk.........kk..',
+    '................',
+    '................',
+  ],
+  decoracion: [
+    '................',
+    '......kkkk......',
+    '.....kooook.....',
+    '....kooOOook....',
+    '...kooOkkOook...',
+    '..kkkkk..kkkkk..',
+    '..kbbbbbbbbbbk..',
+    '..kbwwbbbbwwbk..',
+    '..kbwwbbbbwwbk..',
+    '..kbbbbbbbbbbk..',
+    '..kbbbbkkbbbbk..',
+    '..kbbbbkbbbbbk..',
+    '..kbbbbkbbbbbk..',
+    '..kkkkkkkkkkkk..',
+    '................',
+    '................',
+  ],
+  ajustes: [
+    '................',
+    '.......kk.......',
+    '...kk.kmmk.kk...',
+    '..kmmkkmmkkmmk..',
+    '..kmmmmmmmmmmk..',
+    '...kmmnnnnmmk...',
+    '.kkkmnkkkknmkkk.',
+    'kmmmmnk..knmmmmk',
+    'kmmmmnk..knmmmmk',
+    '.kkkmnkkkknmkkk.',
+    '...kmmnnnnmmk...',
+    '..kmmmmmmmmmmk..',
+    '..kmmkkmmkkmmk..',
+    '...kk.kmmk.kk...',
+    '.......kk.......',
+    '................',
+  ],
+  cerrar: [
+    '................',
+    '................',
+    '...kk......kk...',
+    '..krrk....krrk..',
+    '..krrrk..krrrk..',
+    '...krrrkkrrrk...',
+    '....krrrrrrk....',
+    '.....krrrrk.....',
+    '.....krrrrk.....',
+    '....krrrrrrk....',
+    '...krrrkkrrrk...',
+    '..krrrk..krrrk..',
+    '..krrk....krrk..',
+    '...kk......kk...',
+    '................',
+    '................',
+  ],
+  izq: ['................', '................', '........kk......', '.......kyk......', '......kyyk......', '.....kyyykkkkk..', '....kyyyyyyyyk..', '...kyyyyyyyyyk..', '...kyyyyyyyyyk..', '....kyyyyyyyyk..', '.....kyyykkkkk..', '......kyyk......', '.......kyk......', '........kk......', '................', '................'],
+  dcha: [],
+  candado: [
+    '................',
+    '......kkkk......',
+    '.....knnnnk.....',
+    '....kn.kk.nk....',
+    '....kn.k..nk....',
+    '....kn....nk....',
+    '...kkkkkkkkkk...',
+    '...kyyyyyyyyk...',
+    '...kyYYYYYYyk...',
+    '...kyyykkyyyk...',
+    '...kyyykkyyyk...',
+    '...kyyyykyyyk...',
+    '...kyyyyyyyyk...',
+    '...kkkkkkkkkk...',
+    '................',
+    '................',
+  ],
+  sol: [
+    '.......k........',
+    '.......y........',
+    '..k....y....k...',
+    '...y.......y....',
+    '......kkk.......',
+    '.....kYYYk......',
+    '....kYyyyyk.....',
+    'ky..kYyyyyk..yk.',
+    '....kyyyyyk.....',
+    '.....kyyyk......',
+    '......kkk.......',
+    '...y.......y....',
+    '..k....y....k...',
+    '.......y........',
+    '.......k........',
+    '................',
+  ],
+  luna: [
+    '................',
+    '......kkkk......',
+    '....kkYYk.......',
+    '...kYYYk........',
+    '...kYYk.........',
+    '..kYYYk.........',
+    '..kYYk..........',
+    '..kYYk..........',
+    '..kYYYk.........',
+    '..kYYYYk.....k..',
+    '...kYYYYkkkkYk..',
+    '...kkYYYYYYYk...',
+    '.....kkYYYkk....',
+    '.......kkk......',
+    '................',
+    '................',
+  ],
+  lluvia: [
+    '................',
+    '.....kkkk.......',
+    '...kkcwwwkkk....',
+    '..kcwwwwwwwwk...',
+    '.kcwwwwwwwwwwk..',
+    '.kccwwwwwwwwck..',
+    '..kkcccccccck...',
+    '....kkkkkkkk....',
+    '...s...s...s....',
+    '..s...s...s.....',
+    '................',
+    '....s...s...s...',
+    '...s...s...s....',
+    '................',
+    '................',
+    '................',
+  ],
+  nube: [
+    '................',
+    '................',
+    '................',
+    '.....kkkk.......',
+    '...kkcwwwkkk....',
+    '..kcwwwwwwwwk...',
+    '.kcwwwwwwwwwwk..',
+    'kcwwwwwwwwwwwwk.',
+    'kccwwwwwwwwwwck.',
+    '.kccccccccccck..',
+    '..kkkkkkkkkkk...',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  corazon: [
+    '................',
+    '................',
+    '..kkk....kkk....',
+    '.krrrk..krrrk...',
+    'krpwrrkkrrrrrk..',
+    'krpprrrrrrrrrk..',
+    'krprrrrrrrrrRk..',
+    '.krrrrrrrrrRk...',
+    '..krrrrrrrRk....',
+    '...krrrrrRk.....',
+    '....krrrRk......',
+    '.....krRk.......',
+    '......kk........',
+    '................',
+    '................',
+    '................',
+  ],
+  check: [
+    '................', '................', '.............kk.', '............kgk.', '...........kggk.', '..kk......kggk..', '.kggk....kggk...', '.kgggk..kggk....', '..kgggkkggk.....', '...kgggggk......', '....kgggk.......', '.....kgk........', '......k.........', '................', '................', '................',
+  ],
+};
+ICONS.dcha = ICONS.izq.map((r) => r.split('').reverse().join(''));
+
+export function icon(name: string): string {
+  return dataURL('icon-' + name, ICONS[name], IK);
+}
