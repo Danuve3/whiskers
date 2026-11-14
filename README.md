@@ -117,6 +117,8 @@ Las reglas de estilo (paleta, proyección, luz y animación) están en `docs/ART
 `.github/workflows/deploy.yml` compila y despliega en GitHub Pages en cada push a `main`
 (`actions/upload-pages-artifact` + `actions/deploy-pages`). En el repositorio, Pages tiene
 que estar configurado con *Source: GitHub Actions* (Settings → Pages).
+El entorno `github-pages` solo acepta despliegues de la rama por defecto, así que `main`
+tiene que ser la rama por defecto (o estar permitida en Settings → Environments).
 
 ## Licencias
 
