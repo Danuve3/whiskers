@@ -87,6 +87,7 @@ export class Ambient {
   pigeons: Pigeon[] = [];
   clouds: { x: number; y: number; r: number; v: number }[] = [];
   puddles: { x: number; y: number; r: number; s: number }[] = [];
+  onFlap?: () => void;
   private t = 0;
   private bounds: [number, number, number, number];
   private trees: [number, number][] = [];
@@ -264,6 +265,7 @@ export class Ambient {
       const [px, py] = playerXY;
       const near = Math.hypot(pg.x - px, pg.y - py) < 26;
       if (pg.state !== 'fly' && pg.state !== 'gone' && near) {
+        this.onFlap?.();
         pg.state = 'fly';
         pg.t = 0;
         pg.flip = pg.x - px < 0 ? false : true;

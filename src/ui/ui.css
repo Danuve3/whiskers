@@ -91,3 +91,11 @@
 .card .blurb { font-size: calc(var(--u) * 6.5); margin-top: calc(var(--u) * 3); color: var(--wood-dark); }
 .card .actions { display: flex; gap: calc(var(--u) * 3); justify-content: center; margin-top: calc(var(--u) * 4); }
 .card input { font: inherit; font-size: calc(var(--u) * 9); width: 100%; border: calc(var(--u) * 1) solid var(--wood-dark); background: #fff4dc; padding: calc(var(--u) * 1) calc(var(--u) * 2); }
+
+/* Ajustes */
+.settings .row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 4); margin: calc(var(--u) * 3) 0; }
+.settings .row.center { justify-content: center; flex-wrap: wrap; }
+.settings .lbl { min-width: calc(var(--u) * 40); }
+.range { -webkit-appearance: none; appearance: none; flex: 1; height: calc(var(--u) * 6); background: #ead9c0; border: calc(var(--u) * 1) solid #5e3f36; }
+.range::-webkit-slider-thumb { -webkit-appearance: none; width: calc(var(--u) * 8); height: calc(var(--u) * 12); background: #f2c14e; border: calc(var(--u) * 1) solid #3d2a2e; }
+.range::-moz-range-thumb { width: calc(var(--u) * 8); height: calc(var(--u) * 12); background: #f2c14e; border: calc(var(--u) * 1) solid #3d2a2e; border-radius: 0; }

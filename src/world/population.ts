@@ -5,6 +5,7 @@ import { Animal, dirFromDelta, type Drawable } from './entities.ts';
 import { makeLook } from '../sprites/breeds.ts';
 import { apply, comfortDistance, hearts, species, stage, type Action, type ActionResult, type AnimalData, type FoodId } from '../sim/model.ts';
 import { matrix } from '../fx/sprites.ts';
+import * as sfx from '../audio/sfx.ts';
 
 export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care';
 
@@ -114,6 +115,7 @@ export class Population {
     if (e) {
       e.brain.think = 0.4;
       e.ent.react('alert', 1.4);
+      if (species(e.data) === 'cat' && Math.random() < 0.6) setTimeout(() => sfx.meow(e.ent.look.shape.legH), 500);
     }
     return b;
   }
@@ -128,10 +130,14 @@ export class Population {
       if (act === 'pet') {
         e.ent.play(species(e.data) === 'dog' ? 'wag' : 'sit');
         e.brain.purr = 2.5;
+        if (species(e.data) === 'cat') sfx.purr(2.4);
+        else sfx.bark(e.ent.look.shape.legH, 1);
       } else {
         e.ent.play('sit');
         e.brain.bandage = 180;
+        sfx.bandage();
       }
+      sfx.heart();
       e.ent.react('heart', 2);
     }
     this.ev.care(e, act, res);
@@ -175,6 +181,7 @@ export class Population {
         B.mode = 'idle';
         B.think = 1.5;
         A.react('heart', 2.2);
+        sfx.heart();
         A.play(species(D) === 'dog' ? 'wag' : 'lick');
         this.ev.care(e, act, res);
       }
@@ -223,6 +230,7 @@ export class Population {
           B.t = B.bowl.kind === 'food' ? 3.6 : 2.6;
           B.bowl.state = 'eating';
           A.play(B.bowl.kind === 'food' ? 'eat' : 'drink');
+          if (B.bowl.kind === 'water') sfx.lap();
         } else {
           B.mode = 'idle';
         }

@@ -7,6 +7,8 @@ import { getFrames } from '../sprites/animals.ts';
 import type { Entry } from '../world/population.ts';
 import type { Game } from '../game.ts';
 import { PALETTE } from '../gfx/palette.ts';
+import * as sfx from '../audio/sfx.ts';
+import { species } from '../sim/model.ts';
 
 // ---------------------------------------------------------------- Avisos
 let toastBox: HTMLDivElement | null = null;
@@ -41,6 +43,8 @@ export function closeRadial(): void {
 export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void): void {
   closeRadial();
   const D = e.data;
+  if (species(D) === 'cat') sfx.meow(e.ent.look.shape.legH);
+  else sfx.bark(e.ent.look.shape.legH, e.ent.look.shape.legH < 8 ? 3 : 1);
   if (!D.known) {
     D.known = true;
     toast(`Has conocido a ${D.name}`);
@@ -73,6 +77,7 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void): vo
         return;
       }
       if (!avail.ok) {
+        sfx.ui('nope');
         why.textContent = avail.reason ?? '';
         why.style.display = '';
         return;

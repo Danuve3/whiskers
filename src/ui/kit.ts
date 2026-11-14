@@ -1,5 +1,6 @@
 // Utilidades de interfaz: escala de píxel de la UI, marcos y elementos básicos.
 import { frames, icon } from './art.ts';
+import * as sfx from '../audio/sfx.ts';
 
 export function setupUI(): void {
   const root = document.documentElement;
@@ -40,7 +41,10 @@ export function iconImg(name: string, cls = 'icon'): HTMLImageElement {
 }
 
 export function button(label: string | Node, onClick: () => void, cls = ''): HTMLButtonElement {
-  return el('button', { class: `btn ui-text ${cls}`, onclick: () => onClick() }, label);
+  return el('button', { class: `btn ui-text ${cls}`, onclick: () => {
+    sfx.ui('tap');
+    onClick();
+  } }, label);
 }
 
 /** Hoja inferior con animación de entrada/salida. */
@@ -53,9 +57,11 @@ export class Sheet {
     document.getElementById('ui')!.appendChild(this.root);
   }
   open(): void {
+    sfx.ui('open');
     requestAnimationFrame(() => requestAnimationFrame(() => this.root.classList.add('open')));
   }
   close(): Promise<void> {
+    sfx.ui('close');
     this.root.classList.remove('open');
     return new Promise((res) => setTimeout(() => {
       this.root.remove();

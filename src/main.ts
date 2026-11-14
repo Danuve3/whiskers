@@ -7,6 +7,10 @@ import { load, store, type SaveData } from './save/save.ts';
 import { newWorld, type WorldState } from './game.ts';
 import { openRadial, closeRadial, openCard, toast } from './ui/animalUI.ts';
 import { decay, hearts, FOODS } from './sim/model.ts';
+import { audio } from './audio/engine.ts';
+import { music } from './audio/music.ts';
+import * as sfx from './audio/sfx.ts';
+import { openSettings } from './ui/settings.ts';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -46,6 +50,11 @@ game.events = {
     persist();
   })),
   groundTap: () => closeRadial(),
+  firstGesture: () => {
+    audio.start();
+    audio.setVolumes(save.settings);
+    music.start();
+  },
   toast: (m) => toast(m),
   care: (e, act, res) => {
     if (!res.ok) {
@@ -56,6 +65,7 @@ game.events = {
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     st[key] = (st[key] ?? 0) + 1;
     if (res.favorite) toast(`¡${FOODS[e.data.favorite].name}! Es la comida favorita de ${e.data.name}.`);
+    if (res.heartUp) sfx.heart();
     if (res.heartUp) toast(`${e.data.name} confía más en ti: ahora tiene ${hearts(e.data)} ${hearts(e.data) === 1 ? 'corazón' : 'corazones'}.`);
     else if (act === 'heal') toast(`Le pones una tirita a ${e.data.name}. ¡Como nuevo!`);
     persist();
@@ -80,7 +90,13 @@ void (async () => {
   game.player.setOutfit(save.outfit);
   game.start();
   if (!shot) {
-    document.getElementById('ui')!.append(el('div', { class: 'hud' }, button(iconImg('armario'), () => wardrobe('Armario'))));
+    document.getElementById('ui')!.append(el('div', { class: 'hud' },
+      button(iconImg('armario'), () => wardrobe('Armario')),
+      button(iconImg('ajustes'), () => openSettings(save, () => audio.setVolumes(save.settings), (d) => {
+        store(d);
+        location.reload();
+      })),
+    ));
     if (!save.characterDone || params.has('editor')) wardrobe('¿Quién eres?');
   }
   if (params.has('editor') && shot) wardrobe('¿Quién eres?');

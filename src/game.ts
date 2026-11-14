@@ -12,6 +12,9 @@ import { Ambient, type Weather } from './fx/ambient.ts';
 import { pixelEllipse, rgb } from './fx/pixel.ts';
 import { heart, alert, zzz, note } from './fx/sprites.ts';
 import { PALETTE } from './gfx/palette.ts';
+import * as sfx from './audio/sfx.ts';
+import { music, moodFor } from './audio/music.ts';
+import { ambience } from './audio/ambience.ts';
 import { Population, type Entry } from './world/population.ts';
 import { generateAnimal, hearts, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
@@ -35,6 +38,7 @@ export interface GameEvents {
   groundTap(): void;
   toast(msg: string): void;
   care(e: Entry, act: Action, res: ActionResult): void;
+  firstGesture?(): void;
 }
 
 interface StaticObj extends Drawable {
@@ -138,6 +142,7 @@ export class Game {
     });
     this.populate();
     this.ambient = new Ambient(m, this.bounds);
+    this.ambient.onFlap = () => sfx.flap();
     const [fx, fy] = this.player.feet();
     this.cam.x = fx;
     this.cam.y = fy - 30;
@@ -152,7 +157,7 @@ export class Game {
       },
       dragEnd: () => {},
       zoom: (s) => this.view.setZoomBias(this.view.zoomBias + s),
-      firstGesture: () => {},
+      firstGesture: () => this.events.firstGesture?.(),
     });
     addEventListener('resize', () => this.view.resize());
     document.addEventListener('visibilitychange', () => {
@@ -238,6 +243,8 @@ export class Game {
         const bx = pl.x + (an.x - pl.x) * k, by = pl.y + (an.y - pl.y) * k;
         const z = this.grid.height[Math.floor(by / TILE) * this.grid.w + Math.floor(bx / TILE)] ?? pl.z;
         this.pop.placeBowl(bx, by, z, P.act === 'feed' ? 'food' : 'water', P.food, P.e.data.id);
+        if (P.act === 'feed') sfx.kibble();
+        else sfx.pour();
         if (P.food !== 'pienso') {
           const inv = this.world.inventory;
           inv[P.food] = Math.max(0, (inv[P.food] ?? 0) - 1);
@@ -330,9 +337,21 @@ export class Game {
     }
   }
 
+  private stepFrame = -1;
   update(dt: number): void {
     const rain = this.weather.rain > 0.3;
     this.player.update(dt, this.grid, rain);
+    // pasos en los frames de contacto
+    const fi = this.player.anim.i;
+    if (this.player.m.moving && fi !== this.stepFrame && (fi === 0 || fi === 4)) sfx.step('piedra');
+    this.stepFrame = fi;
+    // música y ambiente según la hora y el clima
+    music.setTarget(moodFor(this.hour, this.weather.rain));
+    const f = this.zone.meta.fountains[0];
+    ambience.update(dt, {
+      rain: this.weather.rain, wind: this.weather.wind, hour: this.hour, port: false,
+      fountainDist: f ? Math.hypot(this.player.m.x - f.basin.cx, this.player.m.y - f.basin.cy) / TILE : 99,
+    });
     this.handlePending(dt);
     if (!this.opts.shot) {
       this.pop.update(dt, {
