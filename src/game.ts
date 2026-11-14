@@ -142,6 +142,8 @@ export class Game {
   zoneDef: ZoneDef = ZONES.calle;
   private zoneCache = new Map<string, ZoneAssets>();
   private fadeEl: HTMLDivElement | null = null;
+  /** cámara paseando (pantalla de título) */
+  titleDrift = false;
   private exitCooldown = 0;
 
   async init(startZone: ZoneId = 'calle', spawn?: [number, number]): Promise<void> {
@@ -649,6 +651,11 @@ export class Game {
       this.events.fountain?.();
     }
     const pf = this.player.feet();
+    if (this.titleDrift) {
+      this.cam.follow = false;
+      this.cam.x += dt * 7;
+      if (this.cam.x > this.bounds[2] - this.view.w / 2 - 30) this.cam.x = this.bounds[0] + this.view.w / 2 + 30;
+    }
     if (this.cam.follow) {
       const k = 1 - Math.exp(-dt * 4);
       this.cam.x += (pf[0] - this.cam.x) * k;

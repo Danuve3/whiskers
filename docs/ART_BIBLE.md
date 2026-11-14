@@ -111,6 +111,11 @@ La fuente de verdad es `src/gfx/palette.ts`. El techo es de 48 colores.
 6. Empaquetado en atlas PNG + JSON de frames (en `public/gen/`, dentro del precache de la
    PWA).
 
+Variantes horneadas por objeto: capa **nocturna** (ventanas encendidas, cada casa a su
+hora), capa de **nieve** (caras superiores, se funde con alfa según lo que haya cuajado) y,
+en árboles y jardineras, versiones de **otoño** (rampa otoñal), **invierno** (casi sin hojas)
+y **primavera** (flores).
+
 Los edificios salen de **piezas modulares**: planta baja, fachada de piedra o encalada,
 galería, balcón, tejado, puerta y retoques, combinados con semilla.
 
@@ -165,7 +170,18 @@ colores de la paleta.
 - Iconos de 16 y 24 px dibujados a mano con la misma paleta y contorno de tinta.
 - Tipografía: Pixelify Sans (OFL), a tamaños enteros.
 
-## 11. Lista de comprobación (cada iteración)
+## 11. Zonas
+
+| Zona | Identidad | Paleta dominante |
+|---|---|---|
+| Rúa do Portal | Tu calle: galerías, ultramarinos, felpudo y puerta azul | cal, piedra, azul |
+| Praza da Fonte | Fuente, panadería, quiosco y rayuela | granito cálido, teja |
+| Alameda | Castaños de Indias, templete de música, muro con hiedra | verdes, grava |
+| Mercado de abastos | Puestos con toldos de rayas y cajas de fruta y pescado | rayas coral, verde y azul |
+| O Descampado | Nave de ladrillo, cartones, palés, hierba alta | tierra, ladrillo |
+| O Porto | Muelle, espigón, barcas de colores, nasas y redes | agua, colores de barca |
+
+## 12. Lista de comprobación (cada iteración)
 
 1. Líneas 2:1 limpias, sin dientes de sierra.
 2. Luz coherente desde arriba a la izquierda en todo.

@@ -419,3 +419,28 @@ export function drawEyes(img: ImageData, eyes: Frame['eyes'], st: EyeState, S: S
     stamp(img, e.x, e.y - 1, rows, { K: 'ink', w: 'cal4', I: iris, o: lid, '.': null });
   }
 }
+
+// ---------------------------------------------------------------- Precalentado en tiempo ocioso
+const warmQueue: [Look, Clip, number][] = [];
+let warming = false;
+/** Prepara en segundo plano los clips más comunes para que no haya tirones al verlos por primera vez. */
+export function warm(look: Look): void {
+  for (const clip of ['idle', 'walk', 'sit', 'sitDown', 'lie', 'lieDown', 'sleep', 'eat', 'drink', 'trot', 'sneak', 'run'] as Clip[])
+    for (let d = 0; d < 4; d++) warmQueue.push([look, clip, d]);
+  if (!warming) pump();
+}
+function pump(): void {
+  warming = warmQueue.length > 0;
+  if (!warming) return;
+  const ric = (window as unknown as { requestIdleCallback?: (cb: (d: { timeRemaining(): number }) => void) => void }).requestIdleCallback;
+  const step = (deadline?: { timeRemaining(): number }) => {
+    const t0 = performance.now();
+    while (warmQueue.length && (deadline ? deadline.timeRemaining() > 4 : performance.now() - t0 < 6)) {
+      const [l, c, d] = warmQueue.shift()!;
+      getFrames(l, c, d);
+    }
+    pump();
+  };
+  if (ric) ric(step);
+  else setTimeout(() => step(), 30);
+}

@@ -149,3 +149,25 @@
 .wl { font-size: calc(var(--u) * 7.5); margin: calc(var(--u) * 2) 0; line-height: 1.35; }
 .floatbtn { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + var(--u) * 32); }
 .laserbar { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + var(--u) * 22); padding: 0 calc(var(--u) * 4); font-size: calc(var(--u) * 7); }
+
+/* Pantalla de título */
+.title-screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: calc(env(safe-area-inset-top) + var(--u) * 30) 0 calc(env(safe-area-inset-bottom) + var(--u) * 26); z-index: 30; cursor: pointer; transition: opacity 0.7s ease; }
+.title-screen.out { opacity: 0; pointer-events: none; }
+.title-screen .logo { font-family: var(--font); font-weight: 600; font-size: calc(var(--u) * 30); color: #fff4dc; letter-spacing: calc(var(--u) * 1);
+  text-shadow: calc(var(--u) * 1) 0 0 #4a2430, calc(var(--u) * -1) 0 0 #4a2430, 0 calc(var(--u) * 1) 0 #4a2430, 0 calc(var(--u) * -1) 0 #4a2430, calc(var(--u) * 2) calc(var(--u) * 2) 0 #7a3a3a, calc(var(--u) * 3) calc(var(--u) * 3) 0 #4a2430;
+  animation: logo-in 1.2s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.title-screen .tagline { font-family: var(--font); font-size: calc(var(--u) * 8); color: #ffd27a; text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #4a2430; text-align: center; }
+.title-screen .head, .title-screen .foot { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 4); }
+.title-screen .sleepwrap { position: relative; }
+.title-screen .sleeper { image-rendering: pixelated; width: calc(var(--u) * 64 * 1.5); height: calc(var(--u) * 40 * 1.5); display: block; }
+.title-screen .zz { position: absolute; right: calc(var(--u) * 14); top: calc(var(--u) * 2); font-family: var(--font); color: #fff4dc; font-size: calc(var(--u) * 9); animation: zz 2.4s ease-in-out infinite; text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #4a2430; }
+.title-screen .tap { font-family: var(--font); font-size: calc(var(--u) * 9); color: #fff4dc; text-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #4a2430; animation: blink 1.8s ease-in-out infinite; }
+@keyframes logo-in { from { transform: translateY(-30%) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes zz { 0% { transform: translate(0, 0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(calc(var(--u) * 8), calc(var(--u) * -16)); opacity: 0; } }
+@keyframes blink { 50% { opacity: 0.45; } }
+
+/* Tutorial */
+.tuto { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + var(--u) * 32); width: min(92vw, calc(var(--u) * 210)); font-size: calc(var(--u) * 7.5); line-height: 1.35; display: flex; gap: calc(var(--u) * 3); align-items: flex-start; pointer-events: none; }
+.tuto .paw { color: #e86a5c; font-size: calc(var(--u) * 10); line-height: 0.8; }
+.tuto.pop { animation: banner-in 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.tuto.out { animation: toast-out 0.5s ease-in both; }

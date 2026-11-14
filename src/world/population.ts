@@ -3,6 +3,7 @@ import { TILE, type Box } from '../engine/iso.ts';
 import { findPath, nearestWalkable, walkable, type Grid } from './path.ts';
 import { Animal, dirFromDelta, type Drawable } from './entities.ts';
 import { makeLook } from '../sprites/breeds.ts';
+import { warm } from '../sprites/animals.ts';
 import { apply, comfortDistance, hearts, species, stage, type Action, type ActionResult, type AnimalData, type FoodId } from '../sim/model.ts';
 import { matrix } from '../fx/sprites.ts';
 import * as sfx from '../audio/sfx.ts';
@@ -81,6 +82,7 @@ export class Population {
     const [sx, sy] = tx !== undefined && ty !== undefined ? [tx, ty] : data.home;
     const p = nearestWalkable(this.grid, sx, sy) ?? [10, 10];
     const ent = new Animal(data.name, look, p[0], p[1], this.grid);
+    warm(look);
     ent.m.dir = Math.floor(Math.random() * 4);
     const e: Entry = { data, ent, brain: { mode: 'idle', t: 0, think: Math.random() * 2, bowl: null, bandage: 0, purr: 0 } };
     this.entries.push(e);

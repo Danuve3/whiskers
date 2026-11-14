@@ -35,6 +35,7 @@ const SHOTS: Shot[] = [
   { name: 'razas-fila', path: 'dev-sprites.html?only=fila', w: 1400, h: 600, dpr: 1, full: true, wait: 2500 },
   { name: 'galeria-personaje', path: 'dev-sprites.html?only=player', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
   { name: 'galeria-props', path: 'dev-sprites.html?only=props', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'titulo', path: '?clima=sol', ...MOBILE, wait: 3500 },
   { name: 'editor', path: '?shot=1&hora=11&editor=1', ...MOBILE, wait: 2500 },
   { name: 'juego-dia', path: '?shot=1&hora=11', ...MOBILE, wait: 2500 },
   { name: 'juego-atardecer', path: '?shot=1&hora=19.4', ...MOBILE, wait: 2500 },

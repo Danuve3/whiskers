@@ -15,6 +15,8 @@ import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
 import { ZONES, zoneOpen, type ZoneId } from './world/zones.ts';
 import { openWelcome, openFishing } from './ui/extras.ts';
+import { showTitle } from './ui/title.ts';
+import { Tutorial } from './ui/tutorial.ts';
 import { applyOffline } from './sim/offline.ts';
 import { iconImg } from './ui/kit.ts';
 import { Hud, achievementBanner, openAlbum, openAchievements, openMissions, openNeighbor, DECOR_NAMES } from './ui/metaUI.ts';
@@ -55,7 +57,9 @@ const host: MetaHost = {
   get animals() { return W.animals; },
   get meta() { return W.meta; },
   get season() { return game.season; },
-  notifyAchievement: (a) => achievementBanner(a),
+  notifyAchievement: (a) => {
+    if (!shot) achievementBanner(a);
+  },
   notify: (m) => toast(m, 3600),
 };
 const check = () => {
@@ -95,6 +99,7 @@ function card(a: (typeof W.animals)[number]) {
 
 game.events = {
   animalTap: (e) => {
+    tuto?.event('tapAnimal');
     const wasKnown = e.data.known;
     openRadial(game, e, (en) => card(en.data), (en) => {
       game.startLaser(en);
@@ -109,7 +114,10 @@ game.events = {
     toast(`¡${e.data.name} se lo ha pasado en grande! Su bienestar sube.`);
     check();
   },
-  groundTap: () => closeRadial(),
+  groundTap: () => {
+    closeRadial();
+    tuto?.event('moved');
+  },
   firstGesture: () => {
     audio.start();
     audio.setVolumes(save.settings);
@@ -123,6 +131,7 @@ game.events = {
     }
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     bump(host, key);
+    if (act === 'feed') tuto?.event('fed');
     // estadísticas de contexto (para logros y misiones)
     const h = new Date().getHours();
     if (game.weather.rain > 0.3) bump(host, 'cuidadosLluvia');
@@ -155,6 +164,7 @@ game.events = {
   },
   zoneChanged: (z) => {
     W.meta.zone = z;
+    if (z === 'plaza') tuto?.event('plaza');
     toast(`${ZONES[z].title} · ${ZONES[z].blurb}`, 3600);
     check();
   },
@@ -164,8 +174,12 @@ game.events = {
 const origRequest = game.request.bind(game);
 game.request = (e, act, food = 'pienso') => {
   if (act === 'feed' && food === 'jamon' && e.data.name === 'Albóndigo') bump(host, 'albondigoJamon');
+  if (act === 'feed') tuto?.event('requestFeed');
   origRequest(e, act, food);
 };
+
+let pendingWelcome: (() => void) | null = null;
+let tuto: Tutorial | null = null;
 
 const laserBar = el('div', { class: 'laserbar panel ui-text' }, 'Arrastra el dedo para mover el punto rojo');
 laserBar.style.display = 'none';
@@ -245,7 +259,7 @@ void (async () => {
       arrivals.push(W.animals[W.animals.length - 1].name);
     }
     const gifts = giftTick(host, now0, PORTAL, rep.hours * 60);
-    if (save.characterDone) setTimeout(() => openWelcome({ hours: rep.hours, arrivals, gifts, missed: rep.missed }), 600);
+    if (save.characterDone) pendingWelcome = () => openWelcome({ hours: rep.hours, arrivals, gifts, missed: rep.missed });
   }
   game.start();
   evaluate(host);
@@ -255,9 +269,29 @@ void (async () => {
     const near = !!f && Math.hypot(game.player.m.tx - f[0], game.player.m.ty - f[1]) <= 2.2 && !game.player.m.moving;
     fishBtn.style.display = near ? '' : 'none';
   }, 300);
+  (window as unknown as { __game: Game }).__game = game;
+  (window as unknown as { __ready: boolean }).__ready = true;
   if (!shot) {
+    // pantalla de título con el barrio al atardecer
+    const realHour = game.hourOverride;
+    if (!params.has('notitulo')) {
+      game.hourOverride = 19.3;
+      game.titleDrift = true;
+      await new Promise<void>((res) => showTitle(() => {
+        audio.start();
+        audio.setVolumes(save.settings);
+        music.start();
+        game.hourOverride = realHour;
+        game.titleDrift = false;
+        game.cam.follow = true;
+        res();
+      }));
+    }
     const hud = new Hud({
-      album: () => openAlbum(host, card),
+      album: () => {
+        tuto?.event('album');
+        openAlbum(host, card);
+      },
       logros: () => openAchievements(host),
       misiones: () => openMissions(host),
       armario: () => wardrobe('Armario'),
@@ -274,7 +308,18 @@ void (async () => {
     tickHud();
     setInterval(tickHud, 10000);
     if (!save.characterDone || params.has('editor')) wardrobe('¿Quién eres?');
-    else if (game.fiestas.length) setTimeout(() => toast(`¡Hoy es ${EVENTS[game.fiestas[0]].name}! ${EVENTS[game.fiestas[0]].blurb}`, 5000), 1200);
+    else {
+      pendingWelcome?.();
+      if (game.fiestas.length) setTimeout(() => toast(`¡Hoy es ${EVENTS[game.fiestas[0]].name}! ${EVENTS[game.fiestas[0]].blurb}`, 5000), 1200);
+    }
+    // tutorial del primer día
+    if (!save.tutorialDone) {
+      tuto = new Tutorial((W.stats.tutorial ?? 0) as number, (st) => {
+        W.stats.tutorial = st;
+        if (tuto?.done) save.tutorialDone = true;
+        persist();
+      });
+    }
   }
   if (params.has('editor') && shot) wardrobe('¿Quién eres?');
   setInterval(persist, 20000);
