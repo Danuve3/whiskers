@@ -29,10 +29,14 @@ function zone(build: () => ReturnType<typeof buildPlaza>) {
   log(`zona ${z.name} modelada en ${Date.now() - t0} ms`);
   const zs = renderZone(z, log);
   const items: Parameters<typeof packAtlas>[0] = [];
-  for (const g of zs.ground) items.push({ name: g.name, s: g.s, layer: 'px' });
+  for (const g of zs.ground) {
+    items.push({ name: g.name, s: g.s, layer: 'px' });
+    if (g.s.snow) items.push({ name: g.name + '@nieve', s: g.s, layer: 'snow' });
+  }
   for (const o of zs.objects) {
     items.push({ name: o.name, s: o.s, layer: 'px' });
     if (o.s.night) items.push({ name: o.name + '@noche', s: o.s, layer: 'night' });
+    if (o.s.snow) items.push({ name: o.name + '@nieve', s: o.s, layer: 'snow' });
   }
   const { pages, entries } = packAtlas(items, 2048);
   const files: string[] = [];
@@ -49,9 +53,10 @@ function zone(build: () => ReturnType<typeof buildPlaza>) {
     zone: {
       name: z.name, tilesW: z.tilesW, tilesH: z.tilesH,
       ground: zs.ground.map((g) => g.name),
-      objects: zs.objects.map((o) => {
+      objects: zs.objects.filter((o) => !o.variant).map((o) => {
         const src = z.objects.find((x) => x.id === o.id)!;
-        return { sprite: o.name, night: o.s.night ? o.name + '@noche' : null, box: src.box, occluder: src.occluder, kind: src.name };
+        const seasons = zs.objects.filter((v) => v.id === o.id && v.variant).map((v) => v.variant!);
+        return { sprite: o.name, night: o.s.night ? o.name + '@noche' : null, snow: o.s.snow ? o.name + '@nieve' : null, seasons, box: src.box, occluder: src.occluder, kind: src.name };
       }),
       lights: z.lights, smoke: z.smoke, steam: z.steam, lines: z.lines, shelters: z.shelters, fountains: z.fountains,
       height: z.height, walk: z.walk, spawn: z.spawn, benches: z.benches,

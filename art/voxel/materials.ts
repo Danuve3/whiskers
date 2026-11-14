@@ -230,6 +230,14 @@ export const MAT = {
       return r < 0.15 ? -1 : r > 0.88 ? 1 : 0;
     },
   }),
+  leafAutumn: def({
+    name: 'leafAutumn', ramp: 'autumn', min: 0,
+    tex: (c) => {
+      const r = hash3(c.u >> 2, c.v >> 2, c.z >> 2, 15);
+      return r < 0.15 ? -1 : r > 0.88 ? 1 : 0;
+    },
+  }),
+  blossom: def({ name: 'blossom', ramp: 'violet', min: 2, tex: (c) => (hash3(c.u, c.v, c.z, 33) < 0.4 ? 1 : 0) }),
   bark: def({ name: 'bark', ramp: 'wood', bias: -1, tex: (c) => (mod(c.u, 4) === 0 && hash3(c.u, c.v >> 3, 0, 17) < 0.6 ? -1 : 0) }),
   bread: def({ name: 'bread', ramp: 'yellow', min: 1 }),
   paper: def({ name: 'paper', ramp: 'white', min: 2 }),

@@ -15,6 +15,9 @@ import { PALETTE } from './gfx/palette.ts';
 import * as sfx from './audio/sfx.ts';
 import { music, moodFor } from './audio/music.ts';
 import { ambience } from './audio/ambience.ts';
+import { season as seasonOf, activeEvents, canonicalHour, type Season, type EventId } from './sim/calendar.ts';
+import { weatherAt, lerpW, skyAt, type Sky } from './sim/weather.ts';
+import { Festivities } from './fx/events.ts';
 import { Population, type Entry } from './world/population.ts';
 import { generateAnimal, hearts, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
@@ -43,6 +46,9 @@ export interface GameEvents {
 
 interface StaticObj extends Drawable {
   sprite: SpriteRef;
+  base: SpriteRef;
+  variants: Partial<Record<string, SpriteRef>>;
+  snow: SpriteRef | null;
   night: SpriteRef | null;
   occluder: boolean;
   kind: string;
@@ -54,6 +60,8 @@ export interface GameOptions {
   hour?: number;
   weather?: Partial<Weather>;
   shot?: boolean;
+  season?: Season;
+  events?: EventId[];
 }
 
 export class Game {
@@ -77,6 +85,12 @@ export class Game {
   weather: Weather = { rain: 0, fog: 0, snow: 0, overcast: 0, wind: 0.2 };
   grade!: Grade;
   hourOverride: number | null = null;
+  season: Season = 'otoño';
+  fiestas: EventId[] = [];
+  fest!: Festivities;
+  snowCover = 0;
+  sky: Sky = 'sol';
+  private weatherT = 0;
   running = false;
   last = 0;
   private marker: { x: number; y: number; t: number } | null = null;
@@ -89,24 +103,41 @@ export class Game {
 
   get hour(): number {
     if (this.hourOverride !== null) return this.hourOverride;
-    const d = new Date();
-    return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    return canonicalHour(new Date());
   }
 
   async init(): Promise<void> {
     this.zone = await loadZone('plaza');
     const m = this.zone.meta;
     this.grid = { w: m.tilesW, h: m.tilesH, walk: m.walk, height: m.height };
-    // objetos estáticos
+    const now = new Date();
+    this.season = this.opts.season ?? seasonOf(now);
+    this.fiestas = this.opts.events ?? activeEvents(now);
+    const seasonKey = this.season === 'otoño' ? 'otono' : this.season;
+    if (!this.opts.weather) {
+      Object.assign(this.weather, weatherAt(now));
+      this.sky = skyAt(now);
+    }
+    if (this.weather.snow > 0.5) this.snowCover = 1;
+    // objetos estáticos (con su variante de estación y su capa de nieve)
     for (const o of m.objects) {
-      const sprite = this.zone.sprites.get(o.sprite)!;
+      const base = this.zone.sprites.get(o.sprite)!;
+      const variants: StaticObj['variants'] = {};
+      for (const v of o.seasons ?? []) variants[v] = this.zone.sprites.get(`${o.sprite}~${v}`);
+      const sprite = variants[seasonKey] ?? base;
+      const vn = variants[seasonKey] ? `${o.sprite}~${seasonKey}` : o.sprite;
       const night = o.night ? this.zone.sprites.get(o.night) ?? null : null;
+      const snow = this.zone.sprites.get(vn + '@nieve') ?? null;
       const obj: StaticObj = {
-        sprite, night, occluder: o.occluder, kind: o.kind, box: o.box, fade: 1,
+        sprite, base, variants, snow, night, occluder: o.occluder, kind: o.kind, box: o.box, fade: 1,
         nightAt: 0.3 + (Math.abs(Math.sin(o.box[0] * 12.9898 + o.box[1] * 78.233)) % 1) * 0.45,
         draw: (ctx, camX, camY) => {
           ctx.globalAlpha = obj.fade;
           ctx.drawImage(sprite.img, sprite.x, sprite.y, sprite.w, sprite.h, sprite.ox - camX, sprite.oy - camY, sprite.w, sprite.h);
+          if (snow && this.snowCover > 0.01) {
+            ctx.globalAlpha = obj.fade * Math.min(1, this.snowCover);
+            ctx.drawImage(snow.img, snow.x, snow.y, snow.w, snow.h, snow.ox - camX, snow.oy - camY, snow.w, snow.h);
+          }
           ctx.globalAlpha = 1;
         },
         rect: [sprite.ox, sprite.oy, sprite.w, sprite.h],
@@ -142,6 +173,8 @@ export class Game {
     });
     this.populate();
     this.ambient = new Ambient(m, this.bounds);
+    this.fest = new Festivities(this.fiestas, m);
+    for (const l of this.fest.lights) this.lights.push(l);
     this.ambient.onFlap = () => sfx.flap();
     const [fx, fy] = this.player.feet();
     this.cam.x = fx;
@@ -338,6 +371,7 @@ export class Game {
   }
 
   private stepFrame = -1;
+  private weatherTarget: Weather | null = null;
   update(dt: number): void {
     const rain = this.weather.rain > 0.3;
     this.player.update(dt, this.grid, rain);
@@ -345,6 +379,20 @@ export class Game {
     const fi = this.player.anim.i;
     if (this.player.m.moving && fi !== this.stepFrame && (fi === 0 || fi === 4)) sfx.step('piedra');
     this.stepFrame = fi;
+    // clima del día (con transición suave) y nieve que cuaja poco a poco
+    if (!this.opts.weather) {
+      this.weatherT -= dt;
+      if (this.weatherT <= 0) {
+        this.weatherT = 20;
+        const target = weatherAt(new Date());
+        this.sky = skyAt(new Date());
+        this.weatherTarget = target;
+      }
+      if (this.weatherTarget) Object.assign(this.weather, lerpW(this.weather, this.weatherTarget, Math.min(1, dt * 0.05)));
+    }
+    if (this.weather.snow > 0.3) this.snowCover = Math.min(1, this.snowCover + dt / 480);
+    else if (this.snowCover > 0) this.snowCover = Math.max(0, this.snowCover - dt / (this.hour > 10 && this.hour < 17 ? 900 : 2400));
+    this.fest.update(dt, this.grade?.night ?? 0);
     // música y ambiente según la hora y el clima
     music.setTarget(moodFor(this.hour, this.weather.rain));
     const f = this.zone.meta.fountains[0];
@@ -372,7 +420,7 @@ export class Game {
     this.cam.x = clampAxis(this.cam.x, x0 + this.view.w / 2 + 24, x1 - this.view.w / 2 - 24);
     this.cam.y = clampAxis(this.cam.y, y0 + this.view.h / 2, y1 - this.view.h / 2 - 8);
     this.grade = weatherGrade(gradeAt(this.hour), this.weather.rain, this.weather.fog, this.weather.overcast);
-    this.ambient.update(dt, this.hour, this.weather, [this.player.m.x, this.player.m.y], 'otoño');
+    this.ambient.update(dt, this.hour, this.weather, [this.player.m.x, this.player.m.y], this.season);
     if (this.marker) {
       this.marker.t -= dt;
       if (this.marker.t <= 0) this.marker = null;
@@ -392,6 +440,14 @@ export class Game {
       const X = s.ox - camX, Y = s.oy - camY;
       if (X > v.w || Y > v.h || X + s.w < 0 || Y + s.h < 0) continue;
       b.drawImage(s.img, s.x, s.y, s.w, s.h, X, Y, s.w, s.h);
+      if (this.snowCover > 0.01) {
+        const sn = this.zone.sprites.get(name + '@nieve');
+        if (sn) {
+          b.globalAlpha = Math.min(1, this.snowCover * 0.95);
+          b.drawImage(sn.img, sn.x, sn.y, sn.w, sn.h, sn.ox - camX, sn.oy - camY, sn.w, sn.h);
+          b.globalAlpha = 1;
+        }
+      }
     }
     // suelo mojado: más oscuro y frío
     if (this.weather.rain > 0.05) {
@@ -428,7 +484,8 @@ export class Game {
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
     }
-    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.ambient.drawables);
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.ambient.drawables, ...this.fest.props);
+    for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes
     const pr = this.player.rect;
@@ -447,6 +504,8 @@ export class Game {
     // ropa tendida y aire (humo, hojas…)
     this.ambient.drawLaundry(b, camX, camY, this.weather.wind);
     this.ambient.drawAir(b, camX, camY);
+    this.fest.drawAir(b, camX, camY);
+    this.fest.drawGarlands(b, camX, camY, false);
     // --- luz
     const night = g.night;
     if (night > 0.05) this.lighting.capture(v.buf);
@@ -465,7 +524,9 @@ export class Game {
       b.globalAlpha = 1;
       this.lighting.pools(b, this.lights, camX, camY, night, dt);
     }
+    if (night > 0.2) this.fest.drawGarlands(b, camX, camY, true);
     this.ambient.drawOverlay(b, camX, camY, v.w, v.h, this.weather, night);
+    this.fest.drawConfetti(b, v.w, v.h);
     // reacciones sobre los animales
     for (const a of this.animals) {
       if (!a.reaction) continue;

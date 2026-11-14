@@ -88,6 +88,7 @@ export class Ambient {
   clouds: { x: number; y: number; r: number; v: number }[] = [];
   puddles: { x: number; y: number; r: number; s: number }[] = [];
   onFlap?: () => void;
+  season: string = 'otoño';
   private t = 0;
   private bounds: [number, number, number, number];
   private trees: [number, number][] = [];
@@ -120,11 +121,12 @@ export class Ambient {
   }
 
   update(dt: number, hour: number, w: Weather, playerXY: [number, number], season: 'otoño' | 'invierno' | 'primavera' | 'verano'): void {
+    this.season = season;
     this.t += dt;
     const day = hour > 7.5 && hour < 19.5;
     const night = hour < 6.5 || hour > 21;
     // hojas que caen de los árboles
-    if (this.trees.length && Math.random() < dt * (season === 'otoño' ? 2.2 : 0.5) * (1 + w.wind)) {
+    if (this.trees.length && Math.random() < dt * (season === 'otoño' ? 2.2 : season === 'invierno' ? 0.15 : 0.5) * (1 + w.wind)) {
       const [tx, ty] = this.trees[Math.floor(Math.random() * this.trees.length)];
       const p = this.leaves.spawn();
       if (p) {
@@ -393,7 +395,7 @@ export class Ambient {
     for (const p of this.leaves.items) if (p.on) {
       const fade = p.t > p.life - 1 ? p.life - p.t : 1;
       ctx.globalAlpha = Math.max(0, fade);
-      const img = leaf(p.k + (p.y < p.gy ? Math.floor(p.t * 4) : 0), 'autumn');
+      const img = leaf(p.k + (p.y < p.gy ? Math.floor(p.t * 4) : 0), this.season === 'otoño' || this.season === 'invierno' ? 'autumn' : 'green');
       ctx.drawImage(img, Math.round(p.x - camX), Math.round(p.y - camY));
     }
     ctx.globalAlpha = 1;
@@ -484,6 +486,19 @@ export class Ambient {
           ctx.fillRect(x, y - 2, 1, 1);
         }
         if (s.t > s.life) s.on = false;
+      }
+      ctx.globalAlpha = 1;
+    }
+    // nieve: copos que caen despacio meciéndose
+    if (w.snow > 0.02) {
+      ctx.fillStyle = PALETTE.cal4;
+      const n = Math.floor(90 * w.snow);
+      for (let i = 0; i < n; i++) {
+        const sp = 10 + (i % 5) * 4;
+        const x = ((i * 53.7 + this.t * (3 + w.wind * 10)) % (vw + 10)) + Math.sin(this.t * 1.3 + i) * 3 - 5;
+        const y = (i * 37.3 + this.t * sp) % (vh + 10) - 5;
+        ctx.globalAlpha = i % 3 === 0 ? 1 : 0.7;
+        ctx.fillRect(Math.round(x), Math.round(y), i % 4 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1);
       }
       ctx.globalAlpha = 1;
     }

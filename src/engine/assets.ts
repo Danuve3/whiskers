@@ -17,7 +17,7 @@ export interface ZoneMeta {
   tilesW: number;
   tilesH: number;
   ground: string[];
-  objects: { sprite: string; night: string | null; box: Box; occluder: boolean; kind: string }[];
+  objects: { sprite: string; night: string | null; snow?: string | null; seasons?: string[]; box: Box; occluder: boolean; kind: string }[];
   lights: { x: number; y: number; z: number; kind: 'lamp' | 'wall' | 'kiosk' }[];
   smoke: [number, number, number][];
   steam: [number, number, number][];

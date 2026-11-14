@@ -1,6 +1,6 @@
 // Siluetas, pelajes, animaciones y caché de frames de los animales.
 import type { ColorName, RampName } from '../gfx/palette.ts';
-import { place, rasterize, clean, outline, toImageData, visibleAt, stamp, rot, type V3, type Raster } from './rig.ts';
+import { place, rasterize, clean, outline, toImageData, visibleAt, stamp, rot, project, type V3, type Raster } from './rig.ts';
 import { buildQuad, basePose, REG, PART, type Shape, type Pose } from './quadruped.ts';
 
 // ---------------------------------------------------------------- Pelajes
@@ -327,6 +327,8 @@ export interface Frame {
   eyes: { x: number; y: number; near: boolean }[];
   eyeState: EyeState;
   outline: ColorName;
+  /** coronilla (para gorritos) */
+  top?: [number, number];
 }
 
 export interface Look {
@@ -398,7 +400,9 @@ export function renderClip(look: Look, clip: Clip, dir: number): Frame[] {
     canvas.width = W;
     canvas.height = H;
     canvas.getContext('2d')!.putImageData(img, 0, 0);
-    return { canvas, ox, oy, dur: fd.dur, eyes, eyeState: fd.eyes, outline: outlineColor };
+    const tp = project(rot([built.head[0], built.head[1], built.head[2] + S.head[2] * 0.95], yaw));
+    const top: [number, number] = [Math.round(tp[0] + ox), Math.round(tp[1] + oy)];
+    return { canvas, ox, oy, dur: fd.dur, eyes, eyeState: fd.eyes, outline: outlineColor, top };
   });
 }
 

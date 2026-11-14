@@ -1,12 +1,30 @@
 // Render de una zona: capa de suelo troceada y un sprite por objeto (con capa nocturna).
-import { rasterize, cleanOrphans, selOut, toSprite, trim, type Sprite, type Box } from './voxel/render.ts';
+import { rasterize, cleanOrphans, selOut, toSprite, trim, type Sprite, type Box, type RenderOpts } from './voxel/render.ts';
+import { MAT } from './voxel/materials.ts';
+import type { VoxelWorld } from './voxel/world.ts';
 import { hash3 } from './voxel/world.ts';
 import type { ZoneBuild } from './zones/plaza.ts';
 import { applyDecals } from './decals.ts';
 
 export interface ZoneSprites {
   ground: { name: string; s: Sprite }[];
-  objects: { id: number; name: string; s: Sprite }[];
+  objects: { id: number; name: string; s: Sprite; variant?: string }[];
+}
+
+const SEASON_REMAPS: [string, NonNullable<RenderOpts['remap']>][] = [
+  ['otono', (m, x, y, z) => (m === MAT.leaf ? (hash3(x >> 1, y >> 1, z >> 1, 71) < 0.12 ? 0 : MAT.leafAutumn) : m)],
+  ['invierno', (m, x, y, z) => (m === MAT.leaf ? (hash3(x >> 1, y >> 1, z >> 1, 72) < 0.05 ? MAT.leafAutumn : 0) : m)],
+  ['primavera', (m, x, y, z) => (m === MAT.leaf && hash3(x >> 1, y >> 1, z >> 1, 73) < 0.14 ? MAT.blossom : m)],
+];
+
+function hasLeaves(w: VoxelWorld, b: Box, id: number): boolean {
+  for (let z = b[2]; z < b[5]; z += 2)
+    for (let y = b[1]; y < b[4]; y += 2)
+      for (let x = b[0]; x < b[3]; x += 2) {
+        const c = w.cell(x, y, z);
+        if (c && c >> 8 === id && (c & 255) === MAT.leaf) return true;
+      }
+  return false;
 }
 
 const CHUNK = 256;
@@ -36,19 +54,28 @@ export function renderZone(z: ZoneBuild, log: (m: string) => void): ZoneSprites 
           const c = gs.px[(cy + y) * gs.w + cx + x];
           if (c) { px[y * W + x] = c; any = true; }
         }
-      if (any) ground.push({ name: `${z.name}/suelo-${cx / CHUNK}-${cy / CHUNK}`, s: { w: W, h: H, ox: gs.ox + cx, oy: gs.oy + cy, px, night: null } });
+      const snow = new Uint8Array(W * H);
+      if (gs.snow) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) snow[y * W + x] = gs.snow[(cy + y) * gs.w + cx + x];
+      if (any) ground.push({ name: `${z.name}/suelo-${cx / CHUNK}-${cy / CHUNK}`, s: { w: W, h: H, ox: gs.ox + cx, oy: gs.oy + cy, px, night: null, snow } });
     }
   const objects: ZoneSprites['objects'] = [];
   for (const o of z.objects) {
     const t1 = Date.now();
     const b = w.objectBounds(o.id);
     if (!b) continue;
-    const r = rasterize(w, { filter: (id) => id === o.id, box: b });
-    cleanOrphans(r);
-    selOut(r, o.name.startsWith('casa') || o.name === 'panaderia' ? 8 : 0);
-    applyDecals(z, o.id, r);
-    const s = trim(toSprite(r, litWindow));
+    const one = (remap?: RenderOpts['remap']) => {
+      const r = rasterize(w, { filter: (id) => id === o.id, box: b, remap });
+      cleanOrphans(r);
+      selOut(r, o.name.startsWith('casa') || o.name === 'panaderia' ? 8 : 0);
+      applyDecals(z, o.id, r);
+      return trim(toSprite(r, litWindow));
+    };
+    const s = one();
     objects.push({ id: o.id, name: `${z.name}/${o.id}-${o.name}`, s });
+    // variantes de estación para lo que tiene hojas
+    if (hasLeaves(w, b, o.id)) {
+      for (const [season, remap] of SEASON_REMAPS) objects.push({ id: o.id, name: `${z.name}/${o.id}-${o.name}~${season}`, s: one(remap), variant: season });
+    }
     if (Date.now() - t1 > 500) log(`${o.name} ${s.w}×${s.h} en ${Date.now() - t1} ms`);
   }
   log(`zona ${z.name} renderizada en ${Date.now() - t0} ms`);

@@ -4,6 +4,7 @@ import { getFrames, type Clip, type Frame, type Look } from '../sprites/animals.
 import { getPlayerFrames, type Outfit, type PFrame, type PlayerClip } from '../sprites/player.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { Grid } from './path.ts';
+import { santaHat } from '../fx/events.ts';
 
 export function heightAt(g: Grid, x: number, y: number): number {
   const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
@@ -212,6 +213,8 @@ export class Animal implements Drawable {
   size: number;
   /** tirita recién puesta */
   bandage = false;
+  /** gorrito de Navidad */
+  hat = false;
 
   constructor(name: string, look: Look, tx: number, ty: number, g: Grid) {
     this.name = name;
@@ -318,6 +321,10 @@ export class Animal implements Drawable {
       ctx.fillRect(X + e.x - 1, Y + e.y - 4, 3, 1);
       ctx.fillStyle = PALETTE.peach;
       ctx.fillRect(X + e.x, Y + e.y - 4, 1, 1);
+    }
+    if (this.hat && f.top) {
+      const h = santaHat();
+      ctx.drawImage(h, X + f.top[0] - 3, Y + f.top[1] - 4);
     }
     this.rect = [X + camX, Y + camY, f.canvas.width, f.canvas.height];
   }

@@ -19,6 +19,8 @@ export interface Sprite {
   px: Uint8Array;
   /** Capa nocturna (ventanas encendidas), mismo tamaño. */
   night: Uint8Array | null;
+  /** Capa de nieve (caras superiores), mismo tamaño. */
+  snow?: Uint8Array | null;
 }
 
 export interface Raster {
@@ -116,6 +118,8 @@ export interface RenderOpts {
   noOutline?: boolean;
   /** Ventanas encendidas por id. */
   litWindow?: (id: number) => boolean;
+  /** Cambia materiales al vuelo (variantes de estación); 0 = vacío. */
+  remap?: (mat: number, x: number, y: number, z: number) => number;
 }
 
 export function rasterize(w: VoxelWorld, o: RenderOpts): Raster {
@@ -152,8 +156,11 @@ export function rasterize(w: VoxelWorld, o: RenderOpts): Raster {
         if (X >= bx0 && Y >= by0 && Z >= bz0 && X < bx1 && Y < by1 && Z < bz1) {
           const c = w.cell(X, Y, Z);
           if (c && o.filter(c >> 8)) {
-            hit = c & 255;
-            break;
+            const m = o.remap ? o.remap(c & 255, X, Y, Z) : c & 255;
+            if (m) {
+              hit = m;
+              break;
+            }
           }
         }
         if (tMaxX <= tMaxY && tMaxX <= tMaxZ) {
@@ -266,7 +273,17 @@ export function toSprite(r: Raster, litWindow?: (id: number) => boolean): Sprite
       night[i] = r.ovN[i] || COLOR_INDEX[r.ri[i] >= 3 ? 'butter' : r.ri[i] >= 1 ? 'lampLight' : 'mustard'];
     }
   }
-  return { w: r.w, h: r.h, ox: r.ox, oy: r.oy, px, night };
+  // nieve sobre las caras superiores (tejados, losas, bancos, copas…)
+  const snow = new Uint8Array(N);
+  let anySnow = false;
+  for (let i = 0; i < N; i++) {
+    if (!r.mat[i] || r.face[i] !== 1) continue;
+    const m = material(r.mat[i]);
+    if (m.glass || m.name === 'water' || m.name === 'iron') continue;
+    snow[i] = COLOR_INDEX[r.ri[i] >= 3 ? 'cal4' : r.ri[i] === 2 ? 'stone4' : 'stone3'];
+    anySnow = true;
+  }
+  return { w: r.w, h: r.h, ox: r.ox, oy: r.oy, px, night, snow: anySnow ? snow : null };
 }
 
 /** Recorta bordes transparentes. */
@@ -274,7 +291,7 @@ export function trim(s: Sprite): Sprite {
   let x0 = s.w, y0 = s.h, x1 = -1, y1 = -1;
   for (let y = 0; y < s.h; y++)
     for (let x = 0; x < s.w; x++)
-      if (s.px[y * s.w + x] || (s.night && s.night[y * s.w + x])) {
+      if (s.px[y * s.w + x] || (s.night && s.night[y * s.w + x]) || (s.snow && s.snow[y * s.w + x])) {
         if (x < x0) x0 = x;
         if (y < y0) y0 = y;
         if (x > x1) x1 = x;
@@ -284,10 +301,12 @@ export function trim(s: Sprite): Sprite {
   const W = x1 - x0 + 1, H = y1 - y0 + 1;
   const px = new Uint8Array(W * H);
   const night = s.night ? new Uint8Array(W * H) : null;
+  const snow = s.snow ? new Uint8Array(W * H) : null;
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       px[y * W + x] = s.px[(y + y0) * s.w + x + x0];
       if (night) night[y * W + x] = s.night![(y + y0) * s.w + x + x0];
+      if (snow) snow[y * W + x] = s.snow![(y + y0) * s.w + x + x0];
     }
-  return { w: W, h: H, ox: s.ox + x0, oy: s.oy + y0, px, night };
+  return { w: W, h: H, ox: s.ox + x0, oy: s.oy + y0, px, night, snow };
 }

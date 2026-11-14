@@ -41,7 +41,15 @@ const SHOTS: Shot[] = [
   { name: 'juego-noche', path: '?shot=1&hora=23', ...MOBILE, wait: 2500 },
   { name: 'juego-lluvia', path: '?shot=1&hora=13&clima=lluvia', ...MOBILE, wait: 2500 },
   { name: 'juego-noche-lluvia', path: '?shot=1&hora=22&clima=lluvia', ...MOBILE, wait: 2500 },
-  { name: 'juego-amanecer', path: '?shot=1&hora=7&clima=niebla', ...MOBILE, wait: 2500 },
+  { name: 'estacion-invierno-nieve', path: '?shot=1&hora=12&clima=nieve&estacion=invierno', ...MOBILE, wait: 3000 },
+  { name: 'estacion-primavera', path: '?shot=1&hora=11&estacion=primavera', ...MOBILE, wait: 2500 },
+  { name: 'estacion-verano-sanjuan', path: '?shot=1&hora=22.5&estacion=verano&evento=sanjuan', ...MOBILE, wait: 2500 },
+  { name: 'evento-samain', path: '?shot=1&hora=21.5&evento=samain&clima=niebla', ...MOBILE, wait: 2500 },
+  { name: 'evento-magosto', path: '?shot=1&hora=17&evento=magosto&clima=nublado', ...MOBILE, wait: 2500 },
+  { name: 'evento-navidad', path: '?shot=1&hora=19.8&evento=navidad&estacion=invierno&clima=nieve', ...MOBILE, wait: 3000 },
+  { name: 'evento-entroido', path: '?shot=1&hora=12&evento=entroido&estacion=invierno', ...MOBILE, wait: 2500 },
+  { name: 'clima-orballo', path: '?shot=1&hora=10&clima=orballo', ...MOBILE, wait: 2500 },
+  { name: 'juego-amanecer', path: '?shot=1&hora=7&clima=niebla&estacion=otoño', ...MOBILE, wait: 2500 },
 ];
 
 const exe = existsSync('/opt/pw-browsers/chromium') ? undefined : undefined;

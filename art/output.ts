@@ -34,7 +34,7 @@ export interface AtlasPage {
 }
 
 /** Empaquetado por estantes en páginas de `size`×altura variable. */
-export function packAtlas(items: { name: string; s: Sprite; layer: 'px' | 'night' }[], size = 2048): { pages: AtlasPage[]; entries: AtlasEntry[] } {
+export function packAtlas(items: { name: string; s: Sprite; layer: 'px' | 'night' | 'snow' }[], size = 2048): { pages: AtlasPage[]; entries: AtlasEntry[] } {
   const sorted = items.filter((i) => i.s.w > 0).sort((a, b) => b.s.h - a.s.h);
   const pages: { shelves: { y: number; h: number; x: number }[]; height: number; placed: { it: (typeof items)[0]; x: number; y: number }[] }[] = [];
   const entries: AtlasEntry[] = [];
@@ -69,7 +69,7 @@ export function packAtlas(items: { name: string; s: Sprite; layer: 'px' | 'night
     const H = Math.max(4, pg.height);
     const px = new Uint8Array(size * H);
     for (const pl of pg.placed) {
-      const src = pl.it.layer === 'px' ? pl.it.s.px : pl.it.s.night!;
+      const src = pl.it.layer === 'px' ? pl.it.s.px : pl.it.layer === 'night' ? pl.it.s.night! : pl.it.s.snow!;
       for (let y = 0; y < pl.it.s.h; y++)
         for (let x = 0; x < pl.it.s.w; x++) {
           const c = src[y * pl.it.s.w + x];

@@ -11,6 +11,8 @@ import { audio } from './audio/engine.ts';
 import { music } from './audio/music.ts';
 import * as sfx from './audio/sfx.ts';
 import { openSettings } from './ui/settings.ts';
+import { paramsFor, type Sky } from './sim/weather.ts';
+import type { Season, EventId } from './sim/calendar.ts';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -25,10 +27,14 @@ const persist = () => {
 };
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
+const estacion = params.get('estacion') as Season | null;
+const evento = params.get('evento') as EventId | null;
 const game = new Game(canvas, {
   hour: hora !== null ? Number(hora) : undefined,
   shot,
-  weather: clima === 'lluvia' ? { rain: 1, overcast: 1, wind: 0.4 } : clima === 'niebla' ? { fog: 1, overcast: 0.5 } : clima === 'nublado' ? { overcast: 1 } : {},
+  weather: clima ? paramsFor(clima as Sky) : shot ? paramsFor('sol') : undefined,
+  season: estacion ?? undefined,
+  events: evento ? [evento] : shot ? [] : undefined,
 });
 
 function wardrobe(title: string) {
