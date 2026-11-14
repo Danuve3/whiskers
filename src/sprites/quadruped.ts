@@ -112,24 +112,37 @@ export function buildQuad(S: Shape, P: Pose): Built {
   if (P.curl > 0) return curled(S, P);
   const prims: Prim[] = [];
   const F = 1 + S.fluff * 0.12;
+  // Colocación del tronco por pose: hombro y cadera explícitos; la inclinación sale de su vector.
   const crouchZ = -P.crouch * S.legH * 0.28;
-  const lieZ = -P.lie * (S.legH * 0.78);
-  const sitBack = P.sit;
-  // articulaciones del tronco
-  const pitch = P.pitch + sitBack * 0.62 - P.stretch * 0.32;
-  const center: V3 = [P.bodyX, 0, S.legH + P.bodyZ + crouchZ + lieZ];
-  // al sentarse, el giro es alrededor de la cadera
-  const pivot: V3 = sitBack > 0 ? [-S.bodyLen / 2, 0, center[2]] : [P.stretch * S.bodyLen * 0.25, 0, center[2]];
-  const tf = (v: V3): V3 => {
-    const rel = sub(v, pivot);
-    const r = rot(rel, 0, pitch);
-    return add(r, pivot);
-  };
-  const shoulder = tf([center[0] + S.bodyLen / 2, 0, center[2] + 1]);
-  let hip = tf([center[0] - S.bodyLen / 2, 0, center[2]]);
-  if (sitBack > 0) hip = [hip[0], 0, hip[2] - sitBack * S.legH * 0.55];
-  const sitShift: V3 = [0, 0, -sitBack * S.legH * 0.55];
-  const shoulderS = add(shoulder, mul(sitShift, 0.35));
+  const sitK = P.sit, lieK = P.lie, strK = P.stretch;
+  const half = S.bodyLen / 2;
+  // de pie
+  let sh: V3 = [P.bodyX + half, 0, S.legH + 1 + P.bodyZ + crouchZ];
+  let hq: V3 = [P.bodyX - half, 0, S.legH + P.bodyZ + crouchZ];
+  // sentado: patas delanteras rectas, grupa en el suelo
+  if (sitK > 0) {
+    const shZ = S.legH + 1 - S.chest[2] * 0.05;
+    const hipZ = S.hips[2] * 0.85;
+    const dz = shZ - hipZ;
+    const dx = Math.sqrt(Math.max(S.bodyLen * S.bodyLen * 0.85 - dz * dz, S.bodyLen * S.bodyLen * 0.12));
+    const shS: V3 = [half * 0.6, 0, shZ], hqS: V3 = [half * 0.6 - dx, 0, hipZ];
+    sh = lerp(sh, shS, sitK);
+    hq = lerp(hq, hqS, sitK);
+  }
+  // tumbado (esfinge)
+  if (lieK > 0) {
+    sh = lerp(sh, [half, 0, S.chest[2] * 0.95], lieK);
+    hq = lerp(hq, [-half, 0, S.hips[2] * 0.9], lieK);
+  }
+  // estiramiento: pecho abajo y adelante, grupa arriba
+  if (strK > 0) {
+    sh = lerp(sh, [half + S.bodyLen * 0.15, 0, S.chest[2] * 1.1 + S.legH * 0.25], strK);
+    hq = lerp(hq, [-half + S.bodyLen * 0.1, 0, S.legH + 1], strK);
+  }
+  const pitch = Math.atan2(sh[2] - hq[2], sh[0] - hq[0]) + P.pitch;
+  const shoulder = sh;
+  const hip = hq;
+  const shoulderS = sh;
   const br = 1 + P.breath * 0.06;
   // pecho, caderas y vientre
   prims.push(ell(add(shoulderS, [0, 0, 0]), S.chest[0] * F, S.chest[1] * F * br, S.chest[2] * F * br, REG.FUR, PART.BODY, 0, pitch));
@@ -203,12 +216,12 @@ export function buildQuad(S: Shape, P: Pose): Built {
     const y = L.side * S.legSpread;
     const root: V3 = [L.root[0], y, L.root[2]];
     const ft = P.feet[L.idx];
-    let foot: V3 = [L.root[0] + ft[0], y, ft[1]];
-    if (L.front) foot = [shoulder[0] + ft[0] + P.stretch * S.bodyLen * 0.45, y, ft[1]];
-    else foot = [hip[0] + ft[0] + (sitBack > 0 ? sitBack * S.legH * 0.55 : 0), y, ft[1]];
-    if (P.lie > 0) {
-      if (L.front) foot = [root[0] + S.legH * 0.8 * P.lie + ft[0] * (1 - P.lie), y, Math.max(ft[1], 1.2 * P.lie)];
-      else foot = [root[0] + S.legH * 0.5 * P.lie, y + L.side * 1.5 * P.lie, 1.2];
+    let foot: V3;
+    if (L.front) foot = [shoulder[0] + ft[0] + P.stretch * S.legH * 0.7, y, ft[1]];
+    else foot = [hip[0] + ft[0] + sitK * S.legH * 0.5, y + L.side * sitK * 0.8, ft[1]];
+    if (lieK > 0) {
+      const lf: V3 = L.front ? [shoulder[0] + S.legH * 0.85, y, 1.2] : [hip[0] + S.legH * 0.55, y + L.side * 1.5, 1.2];
+      foot = lerp(foot, lf, lieK);
     }
     if (!L.front && P.scratch > 0 && L.side > 0) {
       // pata trasera hacia la oreja
@@ -303,11 +316,11 @@ function curled(S: Shape, P: Pose): Built {
   }
   // patas delanteras recogidas bajo la barbilla
   prims.push(ell(add(headC, [1.5, 2.5, -S.head[2] * 0.8]), S.paw * 1.6, S.paw * 1.1, S.paw * 0.7, REG.PAW, PART.LEG_FL));
-  // cola rodeando
-  let p: V3 = [-R * 0.4, R * 0.3, 2];
-  for (let i = 0; i < 10; i++) {
-    const a = Math.PI * 0.9 - (i / 10) * Math.PI * 0.9;
-    const q: V3 = [Math.cos(a) * R * 0.85, Math.sin(a) * R * 0.85, 1.8];
+  // cola rodeando por delante (hacia la cámara)
+  let p: V3 = [-R * 0.75, R * 0.2, 2.6];
+  for (let i = 0; i < 12; i++) {
+    const a = Math.PI * 0.95 - (i / 12) * Math.PI * 1.05;
+    const q: V3 = [Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95 + 0.6, 2.4 + Math.sin((i / 12) * Math.PI) * 0.8];
     capsule(prims, p, q, S.tailR * (S.tail === 'fluffy' ? 1.3 : 1), S.tailR * 0.9, REG.FUR, PART.TAIL);
     p = q;
   }

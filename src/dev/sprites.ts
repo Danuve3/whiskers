@@ -8,6 +8,8 @@ const root = document.getElementById('root')!;
 document.body.style.overflow = 'auto';
 document.body.style.touchAction = 'auto';
 document.documentElement.style.overflow = 'auto';
+document.documentElement.style.height = 'auto';
+document.body.style.height = 'auto';
 
 const LOOKS: Look[] = [
   { key: 'tabby', shape: SHAPES.catShort, coat: COATS.tabbyBrown },
@@ -78,16 +80,21 @@ async function main() {
   }
   const params = new URLSearchParams(location.search);
   const only = params.get('only');
+  const clipsParam = params.get('clips');
+  const scales = (params.get('scale') ?? '3,1').split(',').map(Number);
+  const clipList = clipsParam ? (clipsParam.split(',') as Clip[]) : CLIPS;
+  const night = params.get('noche') !== '0';
   for (const look of LOOKS) {
     if (only && only !== look.key) continue;
-    for (const scale of [3, 1]) {
+    for (const scale of scales) {
       const row = section(`${look.key} · ×${scale}`);
-      for (const clip of CLIPS)
+      for (const clip of clipList)
         for (let dir = 0; dir < 4; dir++) {
           if (scale === 1 && dir > 1) continue;
           addCell(row, `${clip} ${dir}`, () => getFrames(look, clip, dir), 72, 76, scale, false);
         }
     }
+    if (!night) continue;
     const row = section(`${look.key} · noche ×3`);
     for (const clip of ['idle', 'walk', 'sit', 'sleep'] as Clip[]) addCell(row, clip, () => getFrames(look, clip, 0), 72, 76, 3, true);
   }

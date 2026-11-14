@@ -84,7 +84,7 @@ function painter(S: Shape, C: Coat, yaw: number) {
           // la "M" de la frente: rayas finas sobre la coronilla
           const top = p[2] - S.legH - S.chest[2];
           s = top > S.head[2] * 0.9 && Math.abs(p[1]) < S.head[1] * 0.45 ? Math.sin(p[1] * 2.4) * 1.2 : -1;
-        } else s = Math.sin(p[0] * 1.45 + Math.sin(p[2] * 0.9 + p[1] * 0.3) * 1.1) * (p[2] > S.legH + 1 ? 1 : 0);
+        } else s = Math.sin(p[0] * 1.45 + p[1] * 0.4 + Math.sin(p[2] * 0.9 + p[1] * 0.3) * 1.1) * (p[2] > S.legH * 0.55 ? 1 : 0);
         if (s > 0.62) return { ramp: C.second };
         return { ramp: C.base };
       }

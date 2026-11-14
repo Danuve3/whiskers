@@ -21,10 +21,16 @@ interface Shot {
 
 const MOBILE = { w: 390, h: 844, dpr: 3 };
 const SHOTS: Shot[] = [
-  { name: 'galeria-gato', path: 'dev-sprites.html?only=tabby', w: 1280, h: 900, dpr: 1, full: true, wait: 1500 },
-  { name: 'galeria-galgo', path: 'dev-sprites.html?only=galgo', w: 1280, h: 900, dpr: 1, full: true, wait: 1500 },
-  { name: 'galeria-personaje', path: 'dev-sprites.html?only=player', w: 1280, h: 900, dpr: 1, full: true, wait: 1500 },
-  { name: 'galeria-props', path: 'dev-sprites.html?only=props', w: 1280, h: 900, dpr: 1, full: true, wait: 1500 },
+  { name: 'galeria-gato-a', path: 'dev-sprites.html?only=tabby&scale=3&noche=0&clips=idle,walk,trot,run,sneak', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-gato-b', path: 'dev-sprites.html?only=tabby&scale=3&noche=0&clips=sitDown,sit,lieDown,lie,sleep,stretch', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-gato-c', path: 'dev-sprites.html?only=tabby&scale=3&clips=lick,scratch,eat,drink,wag,meow', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-gato-x1', path: 'dev-sprites.html?only=tabby&scale=1&noche=0', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-galgo-a', path: 'dev-sprites.html?only=galgo&scale=3&noche=0&clips=idle,walk,trot,run,sneak', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-galgo-b', path: 'dev-sprites.html?only=galgo&scale=3&noche=0&clips=sitDown,sit,lieDown,lie,sleep,stretch', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-galgo-c', path: 'dev-sprites.html?only=galgo&scale=3&clips=lick,scratch,eat,drink,wag,meow', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-galgo-x1', path: 'dev-sprites.html?only=galgo&scale=1&noche=0', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-personaje', path: 'dev-sprites.html?only=player', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
+  { name: 'galeria-props', path: 'dev-sprites.html?only=props', w: 1280, h: 900, dpr: 1, full: true, wait: 2500 },
   { name: 'juego-dia', path: '?shot=1&hora=11', ...MOBILE, wait: 2500 },
   { name: 'juego-atardecer', path: '?shot=1&hora=19.4', ...MOBILE, wait: 2500 },
   { name: 'juego-noche', path: '?shot=1&hora=23', ...MOBILE, wait: 2500 },
@@ -46,6 +52,11 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') console.error(`[${s.name}]`, m.text()); });
     await page.goto(addr + s.path, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => (window as unknown as { __ready?: boolean }).__ready === true, null, { timeout: 60000 });
+    if (s.full) {
+      // los lienzos fuera de la ventana no siempre se pintan: agrandar la ventana a toda la página
+      const h = await page.evaluate(() => document.documentElement.scrollHeight);
+      await page.setViewportSize({ width: s.w, height: Math.min(h, 8000) });
+    }
     await page.waitForTimeout(s.wait ?? 800);
     await page.screenshot({ path: OUT + s.name + '.png', fullPage: !!s.full });
     console.log('✓', s.name);

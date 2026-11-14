@@ -34,6 +34,9 @@ export interface Raster {
   vy: Int16Array;
   vz: Int16Array;
   win: Uint8Array;
+  /** retoques a mano: color de paleta forzado (día y capa nocturna) */
+  ov: Uint8Array;
+  ovN: Uint8Array;
 }
 
 export type Box = [number, number, number, number, number, number];
@@ -123,7 +126,7 @@ export function rasterize(w: VoxelWorld, o: RenderOpts): Raster {
   const r: Raster = {
     w: W, h: H, ox: sx0, oy: sy0,
     mat: new Uint8Array(N), ri: new Uint8Array(N), face: new Uint8Array(N), depth: new Float32Array(N).fill(Infinity),
-    vx: new Int16Array(N), vy: new Int16Array(N), vz: new Int16Array(N), win: new Uint8Array(N),
+    vx: new Int16Array(N), vy: new Int16Array(N), vz: new Int16Array(N), win: new Uint8Array(N), ov: new Uint8Array(N), ovN: new Uint8Array(N),
   };
   for (let py = 0; py < H; py++)
     for (let pxl = 0; pxl < W; pxl++) {
@@ -257,10 +260,10 @@ export function toSprite(r: Raster, litWindow?: (id: number) => boolean): Sprite
   for (let i = 0; i < N; i++) {
     if (!r.mat[i]) continue;
     const m = material(r.mat[i]);
-    px[i] = COLOR_INDEX[RAMPS[m.ramp][r.ri[i]]];
+    px[i] = r.ov[i] || COLOR_INDEX[RAMPS[m.ramp][r.ri[i]]];
     if (m.glass && r.win[i] && litWindow?.(r.win[i])) {
       night ??= new Uint8Array(N);
-      night[i] = COLOR_INDEX[r.ri[i] >= 3 ? 'butter' : r.ri[i] >= 1 ? 'lampLight' : 'mustard'];
+      night[i] = r.ovN[i] || COLOR_INDEX[r.ri[i] >= 3 ? 'butter' : r.ri[i] >= 1 ? 'lampLight' : 'mustard'];
     }
   }
   return { w: r.w, h: r.h, ox: r.ox, oy: r.oy, px, night };

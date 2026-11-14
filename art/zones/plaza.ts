@@ -5,6 +5,7 @@ import { MAT } from '../voxel/materials.ts';
 import { box, Frame } from '../voxel/shapes.ts';
 import { buildHouse, GROUND_Z, type HouseInfo, type HouseSpec } from '../modules/house.ts';
 import { fountain, lamp, bench, tree, kiosk, planter, type FountainInfo } from '../modules/props.ts';
+import { DECALS, resetDecals } from '../decals.ts';
 
 export const T = 16;
 
@@ -39,6 +40,7 @@ export interface ZoneBuild {
 export function buildPlaza(): ZoneBuild {
   const TW = 22, TH = 22;
   const w = new VoxelWorld(TW * T, TH * T, 380);
+  resetDecals();
   const G = GROUND_Z; // 40
   const PL = 20 * T; // borde de la plaza
   const objects: ZoneObject[] = [];
@@ -210,6 +212,18 @@ export function buildPlaza(): ZoneBuild {
       for (let y = PL - 3; y < PL; y++)
         for (let z = G; z < G + 12; z++) w.set(x, y, z, z >= G + 10 ? MAT.curb : MAT.ashlar, idB);
     }
+  }
+
+  // ---------- Retoques del suelo: rayuela de tiza, tapa de alcantarilla, rejilla
+  {
+    // rayuela: casillas de 8×8 vóxeles en columna a lo largo de −y, con pares laterales
+    const cells = [[0, 0], [0, 1], [-0.5, 2], [0.5, 2], [0, 3], [-0.5, 4], [0.5, 4], [0, 5]];
+    const sq = ['wwwwwwwwwwwwwwww', ...Array(14).fill('w..............w'), 'wwwwwwwwwwwwwwww'];
+    for (const [cx, cy] of cells) DECALS.push({ kind: 'top', obj: 0, x: 206 + cx * 8 - 4, y: 286 - (cy + 1) * 8, z: G, rows: sq, key: { w: 'cal4', '.': null } });
+    const tapa = ['..kkkkkk..', '.kssssssk.', 'kssksskssk', 'ksksskskk.', 'kssksskssk', '.kssssssk.', '..kkkkkk..'];
+    DECALS.push({ kind: 'top', obj: 0, x: 262, y: 168, z: G, rows: tapa.map((r) => r.replace(/./g, (c) => c + c)), key: { k: 'stone0', s: 'stone2', '.': null } });
+    const rejilla = ['kkkkkkkkkk', 'kskskskskk', 'kskskskskk', 'kkkkkkkkkk'];
+    DECALS.push({ kind: 'top', obj: 0, x: 66, y: 196, z: G, rows: rejilla.map((r) => r + r), key: { k: 'ink2', s: 'stone1', '.': null } });
   }
 
   // cajas de objetos que no son casas

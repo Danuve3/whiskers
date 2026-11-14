@@ -4,6 +4,7 @@ import type { VoxelWorld } from '../voxel/world.ts';
 import { rng } from '../voxel/world.ts';
 import { MAT } from '../voxel/materials.ts';
 import { Frame } from '../voxel/shapes.ts';
+import { DECALS, windowDecals, wallDecals, textRows, AZULEJO, AZULEJO_KEY, BREAD, BREAD_KEY, FRUIT, FRUIT_KEY } from '../decals.ts';
 
 export const GROUND_Z = 40; // cota del suelo de la plaza (la calle de abajo está en z = 4)
 export const GF_H = 96; // planta baja
@@ -97,7 +98,7 @@ export function buildHouse(w: VoxelWorld, s: HouseSpec): HouseInfo {
     const cu = Math.round(bayW * (b + 0.5));
     if (s.ground === 'bakery' || s.ground === 'shop') {
       if (b === doorBay) door(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : MAT.woodGreen, 12, 70, info);
-      else shopWindow(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : MAT.woodGreen, Math.min(bayW - 4, 22));
+      else shopWindow(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : MAT.woodGreen, Math.min(bayW - 4, 22), s.ground === 'bakery' ? 'bakery' : 'shop');
     } else if (s.ground === 'arch' && b === doorBay) {
       archDoor(w, F, cu, z0, obj, info);
     } else if (b === doorBay) {
@@ -109,7 +110,7 @@ export function buildHouse(w: VoxelWorld, s: HouseSpec): HouseInfo {
   // toldo de la tienda/panadería
   if (s.ground === 'bakery' || s.ground === 'shop') {
     awning(w, F, 2, W - 2, z0 + 76, obj);
-    signBoard(w, F, Math.round(W / 2), z0 + 82, Math.min(W - 10, 44), obj);
+    signBoard(w, F, Math.round(W / 2), z0 + 82, Math.min(W - 10, 44), obj, s.ground === 'bakery' ? 'PANADERÍA' : 'FRUTAS');
     const [ax0, ay0] = F.at(2, 1);
     const [ax1, ay1] = F.at(W - 2, 12);
     info.shelters.push([Math.min(ax0, ax1) / 16, Math.min(ay0, ay1) / 16, Math.max(ax0, ax1) / 16, Math.max(ay0, ay1) / 16]);
@@ -186,6 +187,7 @@ export function buildHouse(w: VoxelWorld, s: HouseSpec): HouseInfo {
     const pu = R() < 0.5 ? 1 : W - 2;
     F.fill(w, pu, pu + 1, 1, 2, z0, topZ - 1, MAT.zinc, obj);
   }
+  wallDecals(obj, F, W, z0, topZ, s.seed, s.wall === MAT.cal || s.wall === MAT.ochre || s.wall === MAT.salmon || s.wall === MAT.plasterBlue);
   // núcleo: muros sin salientes
   const [ax, ay] = F.at(0, 0);
   const [bx, by] = F.at(W - 1, -D + 1);
@@ -212,6 +214,7 @@ export function window(
       F.set(w, u, -3, z, edge || mull ? frameMat : MAT.glass, obj, edge || mull ? undefined : id);
     }
   if (sill) F.fill(w, u0 - 2, u1 + 2, 1, 3, z0 - 3, z0 - 1, MAT.granite, obj);
+  windowDecals(obj, F, u0, z0, ww, hh, id + obj * 31);
   if (withShutters && shutter) {
     const sw = Math.ceil(ww / 2);
     F.fill(w, u0 - 2 - sw, u0 - 2, 1, 2, z0, z0 + hh, shutter, obj);
@@ -238,6 +241,8 @@ function door(w: VoxelWorld, F: Frame, cu: number, z0: number, obj: number, mat:
   F.fill(w, lu - 1, lu + 2, 3, 6, z0 + hh - 4, z0 + hh - 2, MAT.iron, obj);
   const [lx, ly] = F.at(lu, 4);
   info.lights.push([lx, ly, z0 + hh - 8]);
+  const num = String(2 + ((obj * 7 + cu) % 37));
+  DECALS.push({ kind: 'face', obj, F, u: u0 - 6, d: 0, z: z0 + hh - 2, rows: AZULEJO(num), key: AZULEJO_KEY });
   const [dx, dy] = F.at(cu, 8);
   info.doors.push([Math.floor(dx / 16), Math.floor(dy / 16)]);
 }
@@ -266,7 +271,7 @@ function archDoor(w: VoxelWorld, F: Frame, cu: number, z0: number, obj: number, 
   info.doors.push([Math.floor(dx / 16), Math.floor(dy / 16)]);
 }
 
-function shopWindow(w: VoxelWorld, F: Frame, cu: number, z0: number, obj: number, mat: number, ww: number): void {
+function shopWindow(w: VoxelWorld, F: Frame, cu: number, z0: number, obj: number, mat: number, ww: number, kind: 'bakery' | 'shop' = 'shop'): void {
   const u0 = cu - Math.floor(ww / 2), u1 = u0 + ww;
   const hh = 46, zb = z0 + 18;
   const id = nextWindowId();
@@ -279,6 +284,20 @@ function shopWindow(w: VoxelWorld, F: Frame, cu: number, z0: number, obj: number
     }
   // repisa del escaparate
   F.fill(w, u0, u1, -2, 0, zb, zb + 2, MAT.wood, obj);
+  // género en el escaparate (retoque a mano sobre el cristal)
+  if (kind === 'bakery') {
+    const shelf = [BREAD.hogaza, BREAD.barra, BREAD.rosca, BREAD.hogaza];
+    let pu = u0 + 1.5;
+    for (const b of shelf) {
+      if (pu + b[0].length / 2 > u1 - 1) break;
+      DECALS.push({ kind: 'face', obj, F, u: pu, d: -3, z: zb + 1, rows: b, key: BREAD_KEY, mats: [MAT.glass, MAT.wood] });
+      DECALS.push({ kind: 'face', obj, F, u: pu + 1, d: -3, z: zb + 16, rows: BREAD.hogaza, key: BREAD_KEY, mats: [MAT.glass] });
+      pu += b[0].length / 2 + 1.5;
+    }
+  } else {
+    DECALS.push({ kind: 'face', obj, F, u: u0 + 1.5, d: -3, z: zb + 1, rows: FRUIT, key: FRUIT_KEY, mats: [MAT.glass, MAT.wood] });
+    DECALS.push({ kind: 'face', obj, F, u: u0 + 1.5 + 6, d: -3, z: zb + 1, rows: FRUIT, key: FRUIT_KEY, mats: [MAT.glass, MAT.wood] });
+  }
 }
 
 function awning(w: VoxelWorld, F: Frame, u0: number, u1: number, z: number, obj: number): void {
@@ -301,10 +320,13 @@ function awning(w: VoxelWorld, F: Frame, u0: number, u1: number, z: number, obj:
   }
 }
 
-function signBoard(w: VoxelWorld, F: Frame, cu: number, z: number, ww: number, obj: number): void {
+function signBoard(w: VoxelWorld, F: Frame, cu: number, z: number, ww: number, obj: number, text: string): void {
   const u0 = cu - Math.floor(ww / 2);
   F.fill(w, u0, u0 + ww, 1, 2, z, z + 10, MAT.wood, obj);
   F.fill(w, u0 + 1, u0 + ww - 1, 2, 3, z + 1, z + 9, MAT.paper, obj);
+  const rows = textRows(text);
+  const tw = rows[0].length / 2;
+  DECALS.push({ kind: 'face', obj, F, u: cu - tw / 2, d: 2, z: z + 2, rows, key: { '#': 'wood1', '.': null }, mats: [MAT.paper] });
 }
 
 function balconySlab(w: VoxelWorld, F: Frame, cu: number, fz: number, ww: number, obj: number, R: () => number): void {

@@ -4,6 +4,7 @@ import { rng, hash3 } from '../voxel/world.ts';
 import { MAT } from '../voxel/materials.ts';
 import { box, cylinder, ellipsoid, Frame } from '../voxel/shapes.ts';
 import { pot } from './house.ts';
+import { DECALS, textRows } from '../decals.ts';
 
 export interface FountainInfo {
   spouts: [number, number, number, number, number][]; // x,y,z de salida y dx,dy
@@ -193,6 +194,7 @@ export function kiosk(w: VoxelWorld, x: number, y: number, z0: number, obj: numb
   box(w, x + 9, y + 9, z0 + H + 9, x + 13, y + 13, z0 + H + 13, MAT.zinc, obj);
   // cartel
   box(w, x + 3, y + S - 1, z0 + H - 8, x + S - 3, y + S, z0 + H - 1, MAT.paper, obj);
+  DECALS.push({ kind: 'face', obj, F: new Frame('+y', x, y + S - 1, S), u: S / 2 - 5.5, d: 0, z: z0 + H - 7, rows: textRows('PRENSA'), key: { '#': 'veg1', '.': null }, mats: [MAT.paper] });
   return [x + S / 2, y + S + 4, z0 + 40];
 }
 
