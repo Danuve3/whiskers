@@ -113,7 +113,18 @@ export class Game {
   ambient!: Ambient;
   lighting = new Lighting();
   cam = { x: 0, y: 0, follow: true };
+  /** Animal en el que se centra la cámara mientras su menú está abierto. */
+  private focus: { e: Entry; prevFollow: boolean } | null = null;
   bounds: [number, number, number, number] = [0, 0, 0, 0];
+  focusOn(e: Entry | null): void {
+    if (e) {
+      this.focus = { e, prevFollow: this.focus?.prevFollow ?? this.cam.follow };
+      this.cam.follow = false;
+    } else if (this.focus) {
+      this.cam.follow = this.focus.prevFollow;
+      this.focus = null;
+    }
+  }
   weather: Weather = { rain: 0, fog: 0, snow: 0, overcast: 0, wind: 0.2 };
   grade!: Grade;
   hourOverride: number | null = null;
@@ -173,6 +184,7 @@ export class Game {
         this.cam.x -= dx * k;
         this.cam.y -= dy * k;
         this.cam.follow = false;
+        this.focus = null;
       },
       dragEnd: () => {},
       zoom: (s) => this.view.setZoomBias(this.view.zoomBias + s),
@@ -656,7 +668,13 @@ export class Game {
       this.cam.x += dt * 7;
       if (this.cam.x > this.bounds[2] - this.view.w / 2 - 30) this.cam.x = this.bounds[0] + this.view.w / 2 + 30;
     }
-    if (this.cam.follow) {
+    if (this.focus) {
+      // centrar con suavidad al animal tocado (su menú queda en medio de la pantalla)
+      const [sx, sy] = this.focus.e.ent.screenPos();
+      const k = 1 - Math.exp(-dt * 6);
+      this.cam.x += (sx - this.cam.x) * k;
+      this.cam.y += (sy - this.focus.e.ent.look.shape.legH * 1.4 - this.view.h * 0.06 - this.cam.y) * k;
+    } else if (this.cam.follow) {
       const k = 1 - Math.exp(-dt * 4);
       this.cam.x += (pf[0] - this.cam.x) * k;
       this.cam.y += (pf[1] - 30 - this.cam.y) * k;

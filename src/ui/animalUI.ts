@@ -40,6 +40,11 @@ export function closeRadial(): void {
   current = null;
 }
 
+/** Píxel de interfaz actual en px CSS. */
+function uiUnit(): number {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 2;
+}
+
 export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onLaser?: (e: Entry) => void): void {
   closeRadial();
   const D = e.data;
@@ -132,16 +137,21 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
     const camX = Math.round(game.cam.x - v.w / 2), camY = Math.round(game.cam.y - v.h / 2);
     const k = v.zoom / v.dpr;
     const x = (sx - camX) * k, y = (sy - camY - e.ent.look.shape.legH * 1.4) * k;
-    root.style.left = `${Math.max(90, Math.min(innerWidth - 90, x))}px`;
-    root.style.top = `${Math.max(150, Math.min(innerHeight - 60, y))}px`;
+    // márgenes según el tamaño real del menú, para que nunca se corte
+    const u = uiUnit();
+    const mx = (R + 13) * u, top = (R * 0.85 + 34) * u, bottom = 40 * u;
+    root.style.left = `${Math.max(mx, Math.min(innerWidth - mx, x))}px`;
+    root.style.top = `${Math.max(top, Math.min(innerHeight - bottom, y))}px`;
     requestAnimationFrame(follow);
   };
   follow();
+  game.focusOn(e);
   requestAnimationFrame(() => root.classList.add('open'));
   current = {
     root,
     close: () => {
       alive = false;
+      game.focusOn(null);
       root.classList.remove('open');
       setTimeout(() => root.remove(), 200);
     },
