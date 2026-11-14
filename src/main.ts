@@ -13,6 +13,10 @@ import { openSettings } from './ui/settings.ts';
 import { paramsFor, type Sky } from './sim/weather.ts';
 import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
+import { ZONES, zoneOpen, type ZoneId } from './world/zones.ts';
+import { openWelcome, openFishing } from './ui/extras.ts';
+import { applyOffline } from './sim/offline.ts';
+import { iconImg } from './ui/kit.ts';
 import { Hud, achievementBanner, openAlbum, openAchievements, openMissions, openNeighbor, DECOR_NAMES } from './ui/metaUI.ts';
 
 const params = new URLSearchParams(location.search);
@@ -56,6 +60,14 @@ const host: MetaHost = {
 };
 const check = () => {
   evaluate(host);
+  // zonas que se abren
+  const open = (W.meta.zonesOpen ??= ['calle']);
+  for (const id of Object.keys(ZONES) as ZoneId[]) {
+    if (open.includes(id) || !zoneOpen(id, W.stats, W.animals)) continue;
+    open.push(id);
+    toast(`¡Se ha abierto ${ZONES[id].title}! ${ZONES[id].blurb}`, 5000);
+    sfx.gift();
+  }
   persist();
 };
 
@@ -84,8 +96,18 @@ function card(a: (typeof W.animals)[number]) {
 game.events = {
   animalTap: (e) => {
     const wasKnown = e.data.known;
-    openRadial(game, e, (en) => card(en.data));
+    openRadial(game, e, (en) => card(en.data), (en) => {
+      game.startLaser(en);
+      laserBar.style.display = '';
+    });
     if (!wasKnown) check();
+  },
+  laserDone: (e) => {
+    laserBar.style.display = 'none';
+    bump(host, 'laser');
+    sfx.purr(2);
+    toast(`¡${e.data.name} se lo ha pasado en grande! Su bienestar sube.`);
+    check();
   },
   groundTap: () => closeRadial(),
   firstGesture: () => {
@@ -131,6 +153,11 @@ game.events = {
     bump(host, 'visitasFuente');
     check();
   },
+  zoneChanged: (z) => {
+    W.meta.zone = z;
+    toast(`${ZONES[z].title} · ${ZONES[z].blurb}`, 3600);
+    check();
+  },
 };
 
 // recordar qué comida se dio a Albóndigo (logro secreto)
@@ -140,20 +167,38 @@ game.request = (e, act, food = 'pienso') => {
   origRequest(e, act, food);
 };
 
+const laserBar = el('div', { class: 'laserbar panel ui-text' }, 'Arrastra el dedo para mover el punto rojo');
+laserBar.style.display = 'none';
+const fishBtn = button(el('span', { style: 'display:flex;align-items:center;gap:6px' }, iconImg('anzuelo', 'icon small'), 'Pescar'), () => openFishing(() => {
+  W.inventory.sardinas = (W.inventory.sardinas ?? 0) + 1;
+  bump(host, 'pesca');
+  check();
+}), 'floatbtn');
+fishBtn.style.display = 'none';
+
 function decorSheet() {
   const sh = new Sheet('Decoración');
-  if (!W.meta.decor.length) sh.body.append(el('div', { class: 'center' }, 'Todavía no tienes decoración. Los vecinos y los logros te darán comederos, bebederos, mantas y casetas.'));
-  for (const id of W.meta.decor) {
+  if (!W.meta.decor.length) sh.body.append(el('div', { class: 'center' }, 'Todavía no tienes decoración para colocar. Los vecinos y los logros te darán comederos, bebederos, mantas y casetas.'));
+  for (const id of [...new Set(W.meta.decor)]) {
     const d = DECOR_NAMES[id] ?? { name: id, desc: '' };
-    sh.body.append(el('div', { class: 'item panel' }, el('div', { class: 'txt' }, el('div', {}, d.name), el('div', { class: 'small' }, d.desc))));
+    sh.body.append(el('div', { class: 'item panel' }, el('div', { class: 'txt' }, el('div', {}, d.name), el('div', { class: 'small' }, d.desc)), button('Colocar aquí', () => {
+      if (game.placeDecor(id)) {
+        toast(`${d.name} colocado en ${ZONES[game.zoneId].title}.`);
+        void sh.close();
+        persist();
+      } else toast('Ahí no cabe. Prueba mirando hacia un sitio libre.');
+    })));
   }
+  const placed = (W.meta.placed ?? []).filter((p) => p.zone === game.zoneId);
+  if (placed.length) sh.body.append(el('div', { class: 'small center' }, `En esta zona: ${placed.map((p) => DECOR_NAMES[p.id]?.name ?? p.id).join(', ')}.`));
   sh.body.append(el('div', { class: 'footer' }, button('Cerrar', () => void sh.close())));
   sh.open();
 }
 
 void (async () => {
   await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
-  await game.init();
+  const zona = params.get('zona') as ZoneId | null;
+  await game.init(shot ? zona ?? 'plaza' : (W.meta.zone as ZoneId | undefined) ?? 'calle');
   // las necesidades bajan muy despacio con el tiempo real
   let lastDecay = Date.now();
   setInterval(() => {
@@ -185,8 +230,31 @@ void (async () => {
   }
   if (game.season === 'verano' && !save.unlocked.includes('logro-verano')) save.unlocked.push('logro-verano');
   game.player.setOutfit(save.outfit);
+  // progreso offline: «Mientras no estabas…»
+  const now0 = Date.now();
+  const openZones = (W.meta.zonesOpen ?? ['calle']) as ZoneId[];
+  const free = openZones.reduce((a, z) => a + Math.max(0, ZONES[z].cap - W.animals.filter((x) => x.zone === z).length), 0);
+  const rep = shot ? null : applyOffline(W.animals, save.lastSeen, now0, free);
+  const arrivals: string[] = [];
+  if (rep && rep.hours >= 0.25) {
+    for (let i = 0; i < rep.arrivals; i++) {
+      const z = openZones[i % openZones.length];
+      const used = new Set(W.animals.map((a) => a.home.join(',')));
+      const home = ZONES[z].homes.find((h) => !used.has(h.join(','))) ?? ZONES[z].homes[i % ZONES[z].homes.length];
+      game.spawnNew(home, true, z);
+      arrivals.push(W.animals[W.animals.length - 1].name);
+    }
+    const gifts = giftTick(host, now0, PORTAL, rep.hours * 60);
+    if (save.characterDone) setTimeout(() => openWelcome({ hours: rep.hours, arrivals, gifts, missed: rep.missed }), 600);
+  }
   game.start();
   evaluate(host);
+  document.getElementById('ui')!.append(laserBar, fishBtn);
+  setInterval(() => {
+    const f = game.zoneDef.fishing;
+    const near = !!f && Math.hypot(game.player.m.tx - f[0], game.player.m.ty - f[1]) <= 2.2 && !game.player.m.moving;
+    fishBtn.style.display = near ? '' : 'none';
+  }, 300);
   if (!shot) {
     const hud = new Hud({
       album: () => openAlbum(host, card),

@@ -29,6 +29,12 @@ export interface HouseSpec {
   seed: number;
   chimney?: boolean;
   sideWallVisible?: 'left' | 'right' | null;
+  /** material de la puerta principal */
+  doorMat?: number;
+  /** rótulo de la tienda */
+  sign?: string;
+  /** género del escaparate */
+  goods?: 'fruit' | 'fish' | 'cheese' | 'bread';
 }
 
 export interface HouseInfo {
@@ -98,11 +104,11 @@ export function buildHouse(w: VoxelWorld, s: HouseSpec): HouseInfo {
     const cu = Math.round(bayW * (b + 0.5));
     if (s.ground === 'bakery' || s.ground === 'shop') {
       if (b === doorBay) door(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : MAT.woodGreen, 12, 70, info);
-      else shopWindow(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : MAT.woodGreen, Math.min(bayW - 4, 22), s.ground === 'bakery' ? 'bakery' : 'shop');
+      else shopWindow(w, F, cu, z0, obj, s.ground === 'bakery' ? MAT.wood : s.doorMat ?? MAT.woodGreen, Math.min(bayW - 4, 22), s.ground === 'bakery' || s.goods === 'bread' ? 'bakery' : 'shop');
     } else if (s.ground === 'arch' && b === doorBay) {
       archDoor(w, F, cu, z0, obj, info);
     } else if (b === doorBay) {
-      door(w, F, cu, z0, obj, R() < 0.5 ? MAT.wood : MAT.woodGreen, 12, 66, info);
+      door(w, F, cu, z0, obj, s.doorMat ?? (R() < 0.5 ? MAT.wood : MAT.woodGreen), 12, 66, info);
     } else {
       window(w, F, cu, z0 + 34, 10, 36, obj, frameMat, s.shutter, R() < 0.5, true);
     }
@@ -110,7 +116,7 @@ export function buildHouse(w: VoxelWorld, s: HouseSpec): HouseInfo {
   // toldo de la tienda/panadería
   if (s.ground === 'bakery' || s.ground === 'shop') {
     awning(w, F, 2, W - 2, z0 + 76, obj);
-    signBoard(w, F, Math.round(W / 2), z0 + 82, Math.min(W - 10, 44), obj, s.ground === 'bakery' ? 'PANADERÍA' : 'FRUTAS');
+    signBoard(w, F, Math.round(W / 2), z0 + 82, Math.min(W - 10, 44), obj, s.sign ?? (s.ground === 'bakery' ? 'PANADERÍA' : 'FRUTAS'));
     const [ax0, ay0] = F.at(2, 1);
     const [ax1, ay1] = F.at(W - 2, 12);
     info.shelters.push([Math.min(ax0, ax1) / 16, Math.min(ay0, ay1) / 16, Math.max(ax0, ax1) / 16, Math.max(ay0, ay1) / 16]);

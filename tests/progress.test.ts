@@ -71,3 +71,25 @@ describe('vecinos', () => {
     expect(p.progress).toBe(2);
   });
 });
+
+import { zoneOpen, ZONES } from '../src/world/zones.ts';
+import { generateAnimal } from '../src/sim/model.ts';
+describe('zonas', () => {
+  it('la calle siempre está abierta y la plaza tras dar de comer', () => {
+    expect(zoneOpen('calle', {}, [])).toBe(true);
+    expect(zoneOpen('plaza', {}, [])).toBe(false);
+    expect(zoneOpen('plaza', { alimentar: 1 }, [])).toBe(true);
+  });
+  it('el mercado se abre con 3 corazones y el puerto con 4 y 6 conocidos', () => {
+    const as = Array.from({ length: 6 }, (_, i) => ({ ...generateAnimal(i + 1, { zone: 'plaza', used: [], now: 0, home: [0, 0] }), known: true }));
+    expect(zoneOpen('mercado', {}, as)).toBe(false);
+    as[0].trust = 3.1;
+    expect(zoneOpen('mercado', {}, as)).toBe(true);
+    expect(zoneOpen('puerto', {}, as)).toBe(false);
+    as[0].trust = 4.2;
+    expect(zoneOpen('puerto', {}, as)).toBe(true);
+  });
+  it('las salidas son recíprocas', () => {
+    for (const z of Object.values(ZONES)) for (const e of z.exits) expect(ZONES[e.to].exits.some((x) => x.to === z.id)).toBe(true);
+  });
+});

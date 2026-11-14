@@ -49,6 +49,12 @@ const SHOTS: Shot[] = [
   { name: 'evento-navidad', path: '?shot=1&hora=19.8&evento=navidad&estacion=invierno&clima=nieve', ...MOBILE, wait: 3000 },
   { name: 'evento-entroido', path: '?shot=1&hora=12&evento=entroido&estacion=invierno', ...MOBILE, wait: 2500 },
   { name: 'clima-orballo', path: '?shot=1&hora=10&clima=orballo', ...MOBILE, wait: 2500 },
+  { name: 'zona-calle', path: '?shot=1&hora=10.5&zona=calle', ...MOBILE, wait: 2500 },
+  { name: 'zona-parque', path: '?shot=1&hora=12&zona=parque', ...MOBILE, wait: 2500 },
+  { name: 'zona-mercado', path: '?shot=1&hora=11&zona=mercado', ...MOBILE, wait: 2500 },
+  { name: 'zona-descampado', path: '?shot=1&hora=18.5&zona=descampado', ...MOBILE, wait: 2500 },
+  { name: 'zona-puerto', path: '?shot=1&hora=16&zona=puerto', ...MOBILE, wait: 2500 },
+  { name: 'zona-puerto-noche', path: '?shot=1&hora=22&zona=puerto', ...MOBILE, wait: 2500 },
   { name: 'juego-amanecer', path: '?shot=1&hora=7&clima=niebla&estacion=otoño', ...MOBILE, wait: 2500 },
 ];
 

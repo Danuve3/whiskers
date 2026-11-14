@@ -73,7 +73,7 @@ export function renderZone(z: ZoneBuild, log: (m: string) => void): ZoneSprites 
     const s = one();
     objects.push({ id: o.id, name: `${z.name}/${o.id}-${o.name}`, s });
     // variantes de estación para lo que tiene hojas
-    if (hasLeaves(w, b, o.id)) {
+    if ((o.name === 'arbol' || o.name === 'jardinera' || o.name === 'seto') && hasLeaves(w, b, o.id)) {
       for (const [season, remap] of SEASON_REMAPS) objects.push({ id: o.id, name: `${z.name}/${o.id}-${o.name}~${season}`, s: one(remap), variant: season });
     }
     if (Date.now() - t1 > 500) log(`${o.name} ${s.w}×${s.h} en ${Date.now() - t1} ms`);

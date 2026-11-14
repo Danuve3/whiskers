@@ -7,9 +7,10 @@ import { apply, comfortDistance, hearts, species, stage, type Action, type Actio
 import { matrix } from '../fx/sprites.ts';
 import * as sfx from '../audio/sfx.ts';
 
-export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care';
+export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care' | 'feeder';
 
 export interface Brain {
+  feederId?: string;
   mode: Mode;
   t: number; // tiempo restante en el modo
   think: number;
@@ -70,6 +71,8 @@ const tdist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax 
 export class Population {
   entries: Entry[] = [];
   bowls: Bowl[] = [];
+  /** comederos, bebederos, mantas y casetas colocados */
+  feeders: { id: string; x: number; y: number }[] = [];
 
   constructor(private grid: Grid, private ev: PopulationEvents) {}
 
@@ -144,7 +147,17 @@ export class Population {
     return res;
   }
 
+  private feederAnim = new Map<Entry, 'eat' | 'drink'>();
+
   update(dt: number, w: WorldCtx): void {
+    // al llegar al comedero, comer
+    for (const [e, clip] of this.feederAnim) {
+      if (!e.ent.m.moving && e.brain.mode === 'feeder') {
+        e.ent.play(clip);
+        e.brain.t = 3.2;
+        this.feederAnim.delete(e);
+      } else if (e.brain.mode !== 'feeder') this.feederAnim.delete(e);
+    }
     for (const b of this.bowls) {
       if (b.state === 'empty') b.fade -= dt * 0.35;
     }
@@ -188,6 +201,33 @@ export class Population {
       return;
     }
     if (B.mode === 'care' && B.t > 0) return;
+    // comedero/bebedero colocado: comen solos cuando tienen hambre o sed (sin prisas)
+    if (B.mode === 'feeder') {
+      if (!A.m.moving && B.t > 0) return;
+      if (!A.m.moving && B.t <= 0) {
+        const f = B.feederId === 'bebedero';
+        if (f) D.thirst = Math.min(1, D.thirst + 0.4);
+        else D.hunger = Math.min(1, D.hunger + 0.4);
+        D.wellbeing = Math.min(1, D.wellbeing + 0.05);
+        B.mode = 'idle';
+        B.think = 2;
+        return;
+      }
+      return;
+    }
+    if (B.think <= 0 && !A.m.moving && this.awake(e, w.hour)) {
+      const need: string | null = D.hunger < 0.45 ? 'comedero' : D.thirst < 0.45 ? 'bebedero' : null;
+      const f = need ? this.feeders.find((x) => x.id === need) : null;
+      if (f && pd > comfort * 0.6) {
+        if (this.go(e, f.x / TILE - 0.5, f.y / TILE - 0.5, sp.walk) || tdist(A.m.x, A.m.y, f.x, f.y) < 1.5) {
+          B.mode = 'feeder';
+          B.feederId = need!;
+          B.t = 3.2;
+          this.feederAnim.set(e, need === 'comedero' ? 'eat' : 'drink');
+          return;
+        }
+      }
+    }
     // --- cuenco para mí
     const bowl = this.bowls.find((b) => b.forId === D.id && b.state === 'full');
     if (bowl && B.mode !== 'goBowl') {

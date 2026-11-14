@@ -14,6 +14,12 @@ export interface MetaState {
   decor: string[];
   eventsSeen: string[];
   lastGiftCheck: number;
+  /** decoración colocada en el barrio */
+  placed?: { id: string; zone: string; tx: number; ty: number; t: number }[];
+  /** zonas abiertas (para avisar al abrirse) */
+  zonesOpen?: string[];
+  /** zona en la que estaba el jugador */
+  zone?: string;
 }
 
 export function newMeta(): MetaState {

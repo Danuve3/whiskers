@@ -4,6 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { writePNG } from './lib/png.ts';
 import { renderIcon } from '../art/icons.ts';
 import { buildPlaza } from '../art/zones/plaza.ts';
+import { buildCalle, buildParque, buildMercado, buildDescampado, buildPuerto } from '../art/zones/barrio.ts';
 import { renderZone } from '../art/zoneRender.ts';
 import { packAtlas, spriteRGBA } from '../art/output.ts';
 
@@ -68,5 +69,9 @@ function zone(build: () => ReturnType<typeof buildPlaza>) {
 
 const t0 = Date.now();
 icons();
-zone(buildPlaza);
+const only = process.argv[2];
+for (const b of [buildPlaza, buildCalle, buildParque, buildMercado, buildDescampado, buildPuerto]) {
+  if (only && !b.name.toLowerCase().includes(only)) continue;
+  zone(b);
+}
 log(`listo en ${Date.now() - t0} ms`);

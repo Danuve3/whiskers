@@ -141,3 +141,11 @@
 .talk .face { image-rendering: pixelated; width: calc(var(--u) * 40 * 1.5); height: calc(var(--u) * 40 * 1.5); flex: 0 0 auto; }
 .talk .say { font-size: calc(var(--u) * 7.5); line-height: 1.35; }
 .errand { margin-top: calc(var(--u) * 3); border-width: calc(var(--u) * 5); font-size: calc(var(--u) * 7); }
+
+.fade { position: fixed; inset: 0; background: #1d1828; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; z-index: 20; }
+.fade.on { opacity: 1; }
+.vignette { display: block; margin: 0 auto calc(var(--u) * 3); image-rendering: pixelated; width: calc(var(--u) * 120 * 1.5); height: calc(var(--u) * 64 * 1.5); }
+.fishing .vignette { height: calc(var(--u) * 72 * 1.5); }
+.wl { font-size: calc(var(--u) * 7.5); margin: calc(var(--u) * 2) 0; line-height: 1.35; }
+.floatbtn { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + var(--u) * 32); }
+.laserbar { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + var(--u) * 22); padding: 0 calc(var(--u) * 4); font-size: calc(var(--u) * 7); }

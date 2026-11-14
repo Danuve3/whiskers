@@ -88,6 +88,8 @@ export class Ambient {
   clouds: { x: number; y: number; r: number; v: number }[] = [];
   puddles: { x: number; y: number; r: number; s: number }[] = [];
   onFlap?: () => void;
+  /** mar (puerto): rectángulo en tiles y cota */
+  sea: { r: [number, number, number, number]; z: number } | null = null;
   season: string = 'otoño';
   private t = 0;
   private bounds: [number, number, number, number];
@@ -358,6 +360,25 @@ export class Ambient {
         if (w.rain > 0.2) ring(ctx, X + (p.s - 0.5) * r, Y, 1 + ph * r * 0.8, PALETTE.water4);
         ctx.globalAlpha = 1;
       }
+    }
+    // destellos y ondas del mar
+    if (this.sea) {
+      const [x0, y0, x1, y1] = this.sea.r;
+      for (let i = 0; i < 46; i++) {
+        const tx = x0 + ((i * 7.31) % (x1 - x0)), ty = y0 + ((i * 3.77 + i * i * 0.13) % (y1 - y0));
+        const ph = (this.t * 0.5 + i * 0.37) % 1;
+        const [sx, sy] = S(tx * 16, ty * 16, this.sea.z);
+        const X = Math.round(sx - camX + Math.sin(this.t * 0.6 + i) * 4), Y = Math.round(sy - camY);
+        if (ph < 0.5) {
+          ctx.globalAlpha = 0.7 * Math.sin(ph * Math.PI * 2);
+          ctx.fillStyle = PALETTE.water4;
+          ctx.fillRect(X, Y, 3 + (i % 3), 1);
+        } else if (i % 4 === 0) {
+          ctx.globalAlpha = 1 - (ph - 0.5) * 2;
+          ring(ctx, X, Y, 2 + (ph - 0.5) * 12, PALETTE.water3);
+        }
+      }
+      ctx.globalAlpha = 1;
     }
     // ondas en la fuente
     for (const p of this.ripples.items) if (p.on) {

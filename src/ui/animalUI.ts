@@ -40,7 +40,7 @@ export function closeRadial(): void {
   current = null;
 }
 
-export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void): void {
+export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onLaser?: (e: Entry) => void): void {
   closeRadial();
   const D = e.data;
   if (species(D) === 'cat') sfx.meow(e.ent.look.shape.legH);
@@ -57,7 +57,7 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void): vo
   root.append(ring, tag, why);
   const inv = game.world.inventory;
   const specials = (Object.keys(FOODS) as FoodId[]).filter((f) => f !== 'pienso' && (inv[f] ?? 0) > 0);
-  type B = { icon: string; act: Action | 'card'; label: string };
+  type B = { icon: string; act: Action | 'card' | 'laser'; label: string };
   const items: B[] = [
     { icon: 'comida', act: 'feed', label: 'Dar de comer' },
     { icon: 'agua', act: 'water', label: 'Dar agua' },
@@ -65,15 +65,27 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void): vo
     { icon: 'mano', act: 'pet', label: 'Acariciar' },
     { icon: 'ficha', act: 'card', label: 'Ficha' },
   ];
-  const R = 34; // radio en unidades de UI
+  if (species(D) === 'cat') items.splice(4, 0, { icon: 'laser', act: 'laser', label: 'Jugar con el láser' });
+  const R = items.length > 5 ? 38 : 34; // radio en unidades de UI
   let foodRow: HTMLElement | null = null;
   items.forEach((it, i) => {
     const a = Math.PI + (i / (items.length - 1)) * Math.PI; // arco por encima
-    const avail = it.act === 'card' ? { ok: true } : canDo(D, it.act);
+    const avail = it.act === 'card' ? { ok: true } : it.act === 'laser' ? (hearts(D) >= 2 ? { ok: true } : { ok: false, reason: 'Aún le da miedo jugar contigo (2 corazones)' }) : canDo(D, it.act);
     const b = button(iconImg(it.icon), () => {
       if (it.act === 'card') {
         closeRadial();
         onCard(e);
+        return;
+      }
+      if (it.act === 'laser') {
+        if (!avail.ok) {
+          sfx.ui('nope');
+          why.textContent = avail.reason ?? '';
+          why.style.display = '';
+          return;
+        }
+        closeRadial();
+        onLaser?.(e);
         return;
       }
       if (!avail.ok) {

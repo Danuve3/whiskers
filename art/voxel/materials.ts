@@ -145,7 +145,7 @@ export const MAT = {
       return 0;
     },
   }),
-  earth: def({ name: 'earth', ramp: 'wood', bias: -1, tex: (c) => (hash3(c.u >> 1, c.v >> 1, c.z, 3) < 0.15 ? -1 : 0) }),
+  earth: def({ name: 'earth', ramp: 'wood', bias: -1, tex: (c) => { const r = hash3(c.u >> 1, c.v >> 1, c.z, 3); return r < 0.03 ? -1 : r > 0.98 ? 1 : 0; } }),
   moss: def({ name: 'moss', ramp: 'moss', bias: -1, min: 1, tex: (c) => (hash3(c.u >> 1, c.v >> 1, c.z, 8) < 0.25 ? 1 : 0) }),
   water: def({
     name: 'water', ramp: 'water', flat: 2, noCast: true,
@@ -238,6 +238,29 @@ export const MAT = {
     },
   }),
   blossom: def({ name: 'blossom', ramp: 'violet', min: 2, tex: (c) => (hash3(c.u, c.v, c.z, 33) < 0.4 ? 1 : 0) }),
+  cardboard: def({ name: 'cardboard', ramp: 'yellow', bias: -1, min: 0, max: 3, tex: (c) => (c.f !== 1 && mod(c.v, 9) === 0 ? -1 : 0) }),
+  fruitOrange: def({ name: 'fruitOrange', ramp: 'tile', min: 2, tex: (c) => (hash3(c.u, c.v, c.z, 81) < 0.3 ? 1 : 0) }),
+  fish: def({ name: 'fish', ramp: 'blue', min: 2, tex: (c) => (mod(c.u, 4) === 0 ? 1 : 0) }),
+  ice: def({ name: 'ice', ramp: 'white', min: 3 }),
+  cheese: def({ name: 'cheese', ramp: 'yellow', min: 2, max: 4 }),
+  cork: def({ name: 'cork', ramp: 'tile', min: 3 }),
+  gravel: def({
+    name: 'gravel', ramp: 'paving', ao: 1, min: 1, max: 3,
+    tex: (c) => {
+      const r = hash3(c.u, c.v, 0, 91);
+      return r < 0.12 ? -1 : r > 0.93 ? 1 : 0;
+    },
+  }),
+  brick: def({ name: 'brick', ramp: 'tile', ao: 1, bias: -1, min: 0, tex: (c) => {
+    if (c.f === 1) return 0;
+    const row = Math.floor(c.v / 5);
+    const u = c.u + (row % 2) * 5;
+    return mod(c.v, 5) === 0 || mod(u, 10) === 0 ? -1 : 0;
+  } }),
+  rust: def({ name: 'rust', ramp: 'tile', bias: -1, min: 0, tex: (c) => (c.f !== 1 && mod(c.u, 5) === 0 ? -1 : hash3(c.u >> 2, c.v >> 2, 0, 92) < 0.2 ? -1 : 0) }),
+  yellowBoat: def({ name: 'yellowBoat', ramp: 'yellow', ao: 1, edge: true, min: 1 }),
+  netGreen: def({ name: 'netGreen', ramp: 'veg', min: 1, tex: (c) => ((c.u + c.v) % 3 === 0 ? -1 : 0) }),
+  netRed: def({ name: 'netRed', ramp: 'red', min: 1, tex: (c) => ((c.u + c.v) % 3 === 0 ? -1 : 0) }),
   bark: def({ name: 'bark', ramp: 'wood', bias: -1, tex: (c) => (mod(c.u, 4) === 0 && hash3(c.u, c.v >> 3, 0, 17) < 0.6 ? -1 : 0) }),
   bread: def({ name: 'bread', ramp: 'yellow', min: 1 }),
   paper: def({ name: 'paper', ramp: 'white', min: 2 }),

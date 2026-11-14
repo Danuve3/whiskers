@@ -284,6 +284,23 @@ export const NEIGHBORS: Neighbor[] = [
       { stat: 'fichas', n: 10, text: 'Lee 10 fichas del álbum. La cultura es lo primero.', reward: { kind: 'food', food: 'atun', n: 5 }, thanks: 'Latas de atún de las rías. Sí, me las regaló un cliente.' },
     ],
   },
+  {
+    id: 'lua', name: 'Lúa', role: 'la veterinaria',
+    greet: ['¡Hola! Vengo a la Alameda a comer el bocadillo y a pasar revista.', 'Una tirita a tiempo ahorra muchos maullidos.', 'Los galgos son como yo: parecen serios, pero en el fondo son sofás.'],
+    errands: [
+      { stat: 'curar', n: 2, text: 'Hay un par de rasguños por el barrio. ¿Les pones una tirita?', reward: { kind: 'decor', id: 'manta-cuadros', name: 'Manta de cuadros' }, thanks: '¡Perfecto! Toma esta manta: les encanta dormir en sitios blanditos.' },
+      { stat: 'agua', n: 10, text: 'Que beban mucho, sobre todo los perros grandes: 10 cuencos de agua.', reward: { kind: 'food', food: 'pollo', n: 4 }, thanks: 'Pollo hervido, sin sal. Recomendación de la doctora.' },
+      { stat: 'confianzaMax', n: 1, text: 'Cuando un animal te tenga 5 corazones, avísame. Eso es una amistad de verdad.', reward: { kind: 'decor', id: 'caseta', name: 'Caseta' }, thanks: 'Te mereces esta caseta. Para los días de orballo.' },
+    ],
+  },
+  {
+    id: 'xan', name: 'Xan', role: 'el pescador',
+    greet: ['Hoy la mar está como un plato. Las sardinas, mimosas.', 'Las gaviotas me roban más que los gatos. Pero a los gatos les dejo.', 'Si pescas, tira despacio. La sardina es lista.'],
+    errands: [
+      { stat: 'pesca', n: 3, text: 'Pesca 3 sardinas desde el espigón. Es fácil: espera a que pique y tira.', reward: { kind: 'food', food: 'sardinas', n: 6 }, thanks: 'Mira qué bien. Llévate unas cuantas más, que hoy hubo buena marea.' },
+      { stat: 'alimentar', n: 25, text: 'Los gatos del muelle comen mejor que yo. Dales de comer 25 veces.', reward: { kind: 'food', food: 'atun', n: 6 }, thanks: 'Latas de bonito de la conservera. ¡Las mejores!' },
+    ],
+  },
 ];
 
 export interface ErrandState {
