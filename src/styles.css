@@ -1,0 +1,26 @@
+@import '@fontsource/pixelify-sans/400.css';
+@import '@fontsource/pixelify-sans/600.css';
+
+:root {
+  --ink: #1d1828;
+  --night: #2b2d5c;
+  --stone0: #3b3149;
+  --paper: #fff4dc;
+  --paper2: #ead9c0;
+  --wood: #b08a57;
+  --wood-dark: #5e3f36;
+  --coral: #e86a5c;
+  --font: 'Pixelify Sans', monospace;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: var(--stone0);
+  font-family: var(--font); color: var(--ink);
+  user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none;
+}
+#game {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
+  image-rendering: pixelated; image-rendering: crisp-edges; display: block;
+}
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
