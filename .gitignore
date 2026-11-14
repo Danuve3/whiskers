@@ -1,7 +1,8 @@
-node_modules
-dist
-dev-dist
-public/gen
-shots
 *.log
 .DS_Store
+dev-dist
+dist
+node_modules
+public/gen
+shots
+shots/

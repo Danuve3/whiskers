@@ -54,6 +54,8 @@ export const RAMPS = {
   // Rampas compuestas (reutilizan colores de la paleta)
   iron: ['ink', 'ink2', 'stone0', 'stone1', 'stone2'],
   granite: ['stone0', 'stone1', 'stone2', 'stone3', 'cal3'],
+  paving: ['stone1', 'stone2', 'cal1', 'cal2', 'cal3'],
+  cobble: ['stone1', 'stone2', 'cal1', 'stone3', 'stone4'],
   moss: ['veg0', 'veg1', 'veg2', 'veg3', 'veg4'],
   red: ['tile0', 'rose', 'coral', 'pink', 'peach'],
   yellow: ['wood2', 'wood3', 'mustard', 'butter', 'cal4'],
@@ -62,6 +64,17 @@ export const RAMPS = {
   white: ['cal0', 'cal1', 'cal2', 'cal3', 'cal4'],
   glass: ['water0', 'water1', 'water2', 'water3', 'water4'],
   autumn: ['tile0', 'tile1', 'tile2', 'tile3', 'mustard'],
+  // Pelajes y piel
+  woodDark: ['ink', 'wood0', 'wood1', 'wood2', 'wood3'],
+  fawn: ['wood1', 'wood2', 'wood3', 'wood4', 'butter'],
+  earIn: ['rose', 'rose', 'pink', 'pink', 'peach'],
+  black: ['ink', 'ink', 'ink2', 'stone0', 'stone1'],
+  grey: ['ink2', 'stone0', 'stone1', 'stone2', 'stone3'],
+  orange: ['tile0', 'tile1', 'tile2', 'tile3', 'tile4'],
+  cream: ['wood1', 'wood3', 'wood4', 'cal3', 'cal4'],
+  skin: ['tile1', 'tan', 'tan', 'peach', 'cal4'],
+  skinTan: ['wood0', 'wood2', 'wood3', 'tan', 'peach'],
+  skinDeep: ['ink2', 'wood0', 'wood1', 'wood2', 'wood3'],
   snow: ['stone2', 'stone3', 'stone4', 'cal4', 'cal4'],
 } as const satisfies Record<string, Ramp>;
 

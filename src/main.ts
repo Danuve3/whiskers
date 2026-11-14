@@ -1,32 +1,31 @@
 import './styles.css';
 import { registerPWA } from './pwa.ts';
+import { Game } from './game.ts';
+
+const params = new URLSearchParams(location.search);
+const shot = params.has('shot');
+const hora = params.get('hora');
+const clima = params.get('clima');
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!;
+const game = new Game(canvas, {
+  hour: hora !== null ? Number(hora) : undefined,
+  shot,
+  weather: clima === 'lluvia' ? { rain: 1, overcast: 1, wind: 0.4 } : clima === 'niebla' ? { fog: 1, overcast: 0.5 } : clima === 'nublado' ? { overcast: 1 } : {},
+});
 
-function draw() {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(innerWidth * dpr);
-  canvas.height = Math.round(innerHeight * dpr);
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = '#3b3149';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#fff4dc';
-  ctx.textAlign = 'center';
-  ctx.font = `${Math.round(32 * dpr)}px "Pixelify Sans"`;
-  ctx.fillText('Whiskers', canvas.width / 2, canvas.height / 2);
-  ctx.font = `${Math.round(14 * dpr)}px "Pixelify Sans"`;
-  ctx.fillStyle = '#ead9c0';
-  ctx.fillText('El barrio se está despertando…', canvas.width / 2, canvas.height / 2 + 32 * dpr);
-}
-void document.fonts.load('32px "Pixelify Sans"').then(draw);
-addEventListener('resize', draw);
-draw();
+void (async () => {
+  await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
+  await game.init();
+  game.start();
+  (window as unknown as { __ready: boolean; __game: Game }).__ready = true;
+  (window as unknown as { __game: Game }).__game = game;
+})();
 
 registerPWA((apply) => {
   const el = document.createElement('button');
-  el.textContent = 'Nueva versión disponible · tocar para actualizar';
-  el.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);font:inherit;padding:8px 12px;border:2px solid #5e3f36;background:#fff4dc;color:#1d1828';
+  el.className = 'update-toast';
+  el.textContent = 'Hay una versión nueva · tocar para actualizar';
   el.onclick = apply;
   document.getElementById('ui')!.appendChild(el);
 });
