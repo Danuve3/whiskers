@@ -241,6 +241,7 @@ export class Game {
         this.cam.follow = false;
         this.focus = null;
         this.watchBowl = null;
+        this.lastDrag = performance.now();
       },
       dragEnd: () => {},
       zoom: (s) => this.view.setZoomBias(this.view.zoomBias + s),
@@ -486,6 +487,8 @@ export class Game {
   /** retirada pendiente tras dejar un cuenco a un animal desconfiado */
   private stepBack: { x: number; y: number; need: number; t: number } | null = null;
   /** mientras se espera a que un animal se acerque al cuenco, la cámara encuadra cuenco y jugador */
+  /** último arrastre de cámara: pasado un rato sin tocarla, vuelve sola al personaje */
+  lastDrag = 0;
   private watchBowl: { x: number; y: number; z: number; id: string; t: number } | null = null;
 
   private updateStepBack(dt: number): void {
@@ -793,6 +796,7 @@ export class Game {
       const en = this.pop.entries.find((x) => x.data.id === W.id);
       if (W.t <= 0 || !en || en.brain.mode === 'eat' && en.brain.t < 1) this.watchBowl = null;
     }
+    if (!this.cam.follow && !this.focus && !this.watchBowl && !this.laser && !this.titleDrift && !this.opts.shot && performance.now() - this.lastDrag > 7000) this.cam.follow = true;
     if (this.watchBowl && !this.focus) {
       const W = this.watchBowl, [px, py] = this.player.feet();
       const k = 1 - Math.exp(-dt * 3);
@@ -816,7 +820,9 @@ export class Game {
     this.grade = weatherGrade(gradeAt(this.hour), this.weather.rain, this.weather.fog, this.weather.overcast);
     this.ambient.update(dt, this.hour, this.weather, [this.player.m.x, this.player.m.y], this.season);
     if (this.marker) {
-      this.marker.t -= dt;
+      // se queda mientras se camina hacia él y se desvanece al llegar
+      const pm = this.player.m;
+      if (!pm.moving || this.pending) this.marker.t -= dt;
       if (this.marker.t <= 0) this.marker = null;
     }
   }
@@ -854,11 +860,40 @@ export class Game {
     }
     // charcos, ondas, sombras de nubes
     this.ambient.drawGround(b, camX, camY, this.weather, g.sky, g.night);
-    // marcador de destino
+    // ruta: puntitos desde el jugador hasta el destino (los que quedan atrás desaparecen)
+    const pm = this.player.m;
+    if (pm.moving && pm.path.length > 1 && !this.pending) {
+      const G = this.grid;
+      const pts: [number, number, number][] = [[pm.x, pm.y, pm.z]];
+      for (const [tx, ty] of pm.path) pts.push([tx * TILE + 8, ty * TILE + 8, G.height[ty * G.w + tx]]);
+      const phase = (performance.now() / 90) % 7;
+      let acc = phase;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay, az] = pts[i - 1], [bx, by, bz] = pts[i];
+        const ax2 = 2 * (ax - ay), ay2 = ax + ay - az, bx2 = 2 * (bx - by), by2 = bx + by - bz;
+        const L = Math.hypot(bx2 - ax2, by2 - ay2);
+        for (; acc < L; acc += 7) {
+          const k = acc / L;
+          const left = pts.length - i;
+          const dx = Math.round(ax2 + (bx2 - ax2) * k - camX) - 1, dy = Math.round(ay2 + (by2 - ay2) * k - camY);
+          b.globalAlpha = left < 3 ? 0.9 : 0.7;
+          b.fillStyle = PALETTE.stone0;
+          b.fillRect(dx, dy + 1, 2, 1);
+          b.fillStyle = PALETTE.cal4;
+          b.fillRect(dx, dy, 2, 1);
+        }
+        acc -= L;
+      }
+      b.globalAlpha = 1;
+    }
+    // marcador de destino (a la altura real del suelo)
     if (this.marker) {
-      const sx = 2 * (this.marker.x - this.marker.y) - camX, sy = this.marker.x + this.marker.y - 40 - camY;
+      const G = this.grid, mt = Math.floor(this.marker.y / TILE) * G.w + Math.floor(this.marker.x / TILE);
+      const mz = G.height[mt] ?? 40;
+      const sx = 2 * (this.marker.x - this.marker.y) - camX, sy = this.marker.x + this.marker.y - mz - camY;
+      const pulse = pm.moving ? Math.round(Math.sin(performance.now() / 180)) : 0;
       b.globalAlpha = Math.min(1, this.marker.t * 2);
-      b.drawImage(pixelEllipse(6, 3, PALETTE.cal4), Math.round(sx - 6), Math.round(sy - 3));
+      b.drawImage(pixelEllipse(6 + pulse, 3, PALETTE.cal4), Math.round(sx - 6 - pulse), Math.round(sy - 3));
       b.drawImage(pixelEllipse(4, 2, PALETTE.stone2), Math.round(sx - 4), Math.round(sy - 2));
       b.globalAlpha = 1;
     }

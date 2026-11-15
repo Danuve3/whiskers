@@ -165,6 +165,10 @@ export class Player implements Drawable {
   }
 
   update(dt: number, g: Grid, rain: boolean): void {
+    // en trayectos largos corre; al acercarse al destino vuelve a pasear
+    const left = this.m.path.length;
+    const target = left > 6 ? 82 : left > 3 && this.m.speed > 60 ? 64 : 46;
+    this.m.speed += (target - this.m.speed) * Math.min(1, dt * 5);
     this.m.update(dt, g);
     if (this.outfit.rain !== rain) {
       this.outfit = { ...this.outfit, rain };
@@ -177,7 +181,7 @@ export class Player implements Drawable {
       if (this.actionT <= 0) this.action = null;
     }
     this.anim.set(clip + this.m.dir + '|' + this.ver, getPlayerFrames(this.outfit, clip, this.m.dir), true);
-    this.anim.update(dt);
+    this.anim.update(dt, clip === 'walk' ? this.m.speed / 46 : 1);
     const { x, y, z } = this.m;
     this.box = [x - 4, y - 4, z, x + 4, y + 4, z + 50];
   }

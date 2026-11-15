@@ -140,3 +140,33 @@ export function openMap(game: Game): void {
   sheet.body.append(list, el('div', { class: 'footer' }, button(iconImg('cerrar', 'icon small'), () => void sheet.close())));
   sheet.open();
 }
+
+/** Botón para volver al personaje cuando has movido la cámara y lo has perdido de vista. */
+export class RecenterButton {
+  private node: HTMLElement;
+  constructor(private game: Game) {
+    this.node = el('div', { class: 'recenter' }, button(iconImg('centrar'), () => {
+      game.cam.follow = true;
+      game.lastDrag = 0;
+    }));
+    this.node.style.display = 'none';
+    document.getElementById('ui')!.append(this.node);
+    const loop = () => {
+      this.update();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  private update(): void {
+    const g = this.game;
+    let show = false;
+    if (g.grid && !g.cam.follow && !g.laser) {
+      // solo si el personaje queda lejos del centro (o fuera de la pantalla)
+      const [px, py] = g.player.feet();
+      const dx = Math.abs(px - g.cam.x) / (g.view.w / 2), dy = Math.abs(py - 30 - g.cam.y) / (g.view.h / 2);
+      show = Math.max(dx, dy) > 0.45;
+    }
+    const want = show ? '' : 'none';
+    if (this.node.style.display !== want) this.node.style.display = want;
+  }
+}

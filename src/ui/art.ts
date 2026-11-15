@@ -507,6 +507,24 @@ ICONS.mapa = [
   '................',
   '................',
 ];
+ICONS.centrar = [
+  '................',
+  '....kkkRRkkk....',
+  '...kRRRwwRRRk...',
+  '..kRRwwwwwwRRk..',
+  '.kRRwwrrrrwwRRk.',
+  '.kRwwrrwwrrwwRk.',
+  '.kRwrrwrrwrrwRk.',
+  '.RwwrwrrrrwrwwR.',
+  '.RwwrwrrrrwrwwR.',
+  '.kRwrrwrrwrrwRk.',
+  '.kRwwrrwwrrwwRk.',
+  '.kRRwwrrrrwwRRk.',
+  '..kRRwwwwwwRRk..',
+  '...kRRRwwRRRk...',
+  '....kkkRRkkk....',
+  '................',
+];
 ICONS.dcha = ICONS.izq.map((r) => r.split('').reverse().join(''));
 
 export function icon(name: string): string {

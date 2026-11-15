@@ -213,3 +213,5 @@ body:has(.sheet.open) .exit-signs, body:has(.radial) .exit-signs, body:has(.titl
 .zone-row.current { border-color: #e86a5c; background: #fbe7a1; }
 .zone-row.locked .name { color: #9c8a8f; }
 .zone-row .here { font-size: calc(var(--u) * 6); color: #7a3a3a; }
+.recenter { position: fixed; right: calc(var(--u) * 3); bottom: calc(env(safe-area-inset-bottom) + var(--u) * 60); animation: banner-in 0.35s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+body:has(.sheet.open) .recenter { visibility: hidden; }
