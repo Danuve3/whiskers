@@ -13,6 +13,7 @@ import { openSettings } from './ui/settings.ts';
 import { paramsFor, type Sky } from './sim/weather.ts';
 import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
+import { rewardText } from './sim/progress.ts';
 import { ZONES, zoneOpen, type ZoneId } from './world/zones.ts';
 import { openWelcome, openFishing } from './ui/extras.ts';
 import { showTitle } from './ui/title.ts';
@@ -163,11 +164,9 @@ game.events = {
     else if (act === 'heal') toast(`Le pones una tirita a ${e.data.name}. ¡Como nuevo!`);
     check();
   },
-  npcTap: (nb) => openNeighbor(host, nb, npcOutfit(nb.id), (txt) => {
-    const step = (W.meta.errands.step[nb.id] ?? 1) - 1;
-    const er = nb.errands[step];
-    if (er) giveReward(host, er.reward);
-    toast(`${nb.name} te da: ${txt}`);
+  npcTap: (nb) => openNeighbor(host, nb, npcOutfit(nb.id), (er) => {
+    giveReward(host, er.reward);
+    toast(`${nb.name} te da: ${rewardText(er.reward)}`);
     check();
   }),
   giftTap: (i) => {

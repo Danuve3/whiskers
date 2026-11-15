@@ -208,7 +208,7 @@ export function openMissions(h: MetaHost): void {
 }
 
 // ---------------------------------------------------------------- Vecinos
-export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward: (text: string) => void): void {
+export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward: (errand: Neighbor['errands'][number]) => void): void {
   const sheet = new Sheet(`${nb.name}, ${nb.role}`, 'neighbor');
   const c = el('canvas', { width: 40, height: 40, class: 'face' });
   const f = getPlayerFrames(outfit, 'idle', 0)[0];
@@ -218,24 +218,38 @@ export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward
     const e0 = nb.errands[es.step[nb.id] ?? 0];
     if (e0) es.start[nb.id] = h.stats[e0.stat] ?? 0;
   }
-  const { errand, progress } = errandProgress(es, nb, h.stats);
   const say = el('div', { class: 'say' }, nb.greet[Math.floor(Math.random() * nb.greet.length)]);
   const body = el('div', { class: 'talk' }, c, say);
   sheet.body.append(body);
-  if (errand) {
-    const done = progress >= errand.n;
-    sheet.body.append(el('div', { class: 'errand panel' }, el('div', {}, `«${errand.text}»`), el('div', { class: 'small' }, done ? '¡Listo! Ven a por tu recompensa.' : `${progress}/${errand.n} · Recompensa: ${rewardText(errand.reward)} · sin prisa`)));
-    if (done) {
-      sheet.body.append(el('div', { class: 'footer' }, button('Entregar', () => {
-        say.textContent = errand.thanks;
-        es.step[nb.id] = (es.step[nb.id] ?? 0) + 1;
-        const next = nb.errands[es.step[nb.id]];
-        if (next) es.start[nb.id] = h.stats[next.stat] ?? 0;
-        onReward(rewardText(errand.reward));
-        sfx.gift();
-      }, 'primary')));
+  const errandBox = el('div', {});
+  sheet.body.append(errandBox);
+  const showErrand = () => {
+    const { errand, progress } = errandProgress(es, nb, h.stats);
+    errandBox.replaceChildren();
+    if (!errand) {
+      errandBox.append(el('div', { class: 'small center' }, 'Ya no tiene más encargos. ¡Gracias por todo!'));
+      return;
     }
-  } else sheet.body.append(el('div', { class: 'small center' }, 'Ya no tiene más encargos. ¡Gracias por todo!'));
+    const done = progress >= errand.n;
+    errandBox.append(el('div', { class: 'errand panel' }, el('div', {}, `«${errand.text}»`), el('div', { class: 'small' }, done ? '¡Listo! Ven a por tu recompensa.' : `${progress}/${errand.n} · Recompensa: ${rewardText(errand.reward)} · sin prisa`)));
+    if (!done) return;
+    // se entrega una sola vez: el botón desaparece en cuanto se pulsa
+    let delivered = false;
+    const give = button('Entregar', () => {
+      if (delivered) return;
+      delivered = true;
+      give.disabled = true;
+      say.textContent = errand.thanks;
+      es.step[nb.id] = (es.step[nb.id] ?? 0) + 1;
+      const next = nb.errands[es.step[nb.id]];
+      if (next) es.start[nb.id] = h.stats[next.stat] ?? 0;
+      onReward(errand);
+      sfx.gift();
+      showErrand(); // el siguiente encargo (aún sin hacer)
+    }, 'primary');
+    errandBox.append(el('div', { class: 'footer' }, give));
+  };
+  showErrand();
   sheet.body.append(el('div', { class: 'footer' }, button('Adiós', () => void sheet.close())));
   sheet.open();
 }
