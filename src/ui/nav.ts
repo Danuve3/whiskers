@@ -134,7 +134,7 @@ export class ExitSigns {
 /** Mapa del barrio: dónde estás, qué está abierto y cómo abrir lo demás. */
 export function openMap(game: Game): void {
   const sheet = new Sheet('El barrio', 'map');
-  const order: ZoneId[] = ['calle', 'plaza', 'parque', 'mercado', 'descampado', 'puerto'];
+  const order: ZoneId[] = ['calle', 'plaza', 'parque', 'horta', 'mercado', 'descampado', 'puerto'];
   const list = el('div', { class: 'zones' });
   const needy = needyByZone(game.world.animals);
   for (const id of order) {

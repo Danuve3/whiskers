@@ -6,7 +6,8 @@ import { GROUND_Z } from '../modules/house.ts';
 import { lamp, bench, tree, planter } from '../modules/props.ts';
 import { crate, cardboard, pallet, fence, stall, boat, bollard, nasa, nets, bandstand, hedge, flowerbed, tallGrass, shed } from '../modules/props2.ts';
 import { DECALS } from '../decals.ts';
-import { ZoneCtx, T, SURF } from './kit.ts';
+import { box } from '../voxel/shapes.ts';
+import { ZoneCtx, T, SURF, smooth2 } from './kit.ts';
 import type { ZoneBuild } from './plaza.ts';
 
 const G = GROUND_Z;
@@ -325,4 +326,81 @@ export function buildPuerto(): ZoneBuild {
     }
   c.blockObjects((n) => n.startsWith('casa') || n === 'barca');
   return c.finish([8, 8]);
+}
+
+// ======================================================================= HORTA
+/** Bancal elevado de madera con su cultivo. */
+function bancal(c: ZoneCtx, x: number, y: number, sx: number, sy: number, crop: 'col' | 'tomate' | 'calabaza' | 'lechuga', seed: number): void {
+  const w = c.w, obj = c.add('bancal', false), z = G;
+  const R = (k: number) => hash3(x + k, y - k, seed, 77);
+  box(w, x, y, z, x + sx, y + sy, z + 6, (xx, yy, zz) => (xx === x || yy === y || xx === x + sx - 1 || yy === y + sy - 1 ? MAT.wood : zz === z + 5 ? MAT.earth : MAT.rubble), obj);
+  const top = z + 6;
+  for (let yy = y + 2; yy < y + sy - 2; yy += crop === 'calabaza' ? 7 : 4)
+    for (let xx = x + 2; xx < x + sx - 2; xx += crop === 'calabaza' ? 7 : 4) {
+      const r = R(xx * 3 + yy);
+      if (crop === 'col' || crop === 'lechuga') {
+        // cogollos redondos
+        const h = crop === 'col' ? 4 : 2;
+        for (let dz = 0; dz < h; dz++)
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (Math.abs(dx) + Math.abs(dy) + (dz === h - 1 ? 1 : 0) <= 2) w.set(xx + dx, yy + dy, top + dz, MAT.leaf, obj);
+      } else if (crop === 'tomate') {
+        // tomateras con su caña y tomates rojos
+        for (let dz = 0; dz < 12; dz++) w.set(xx, yy, top + dz, dz > 10 ? MAT.wood : MAT.leaf, obj);
+        for (const [dx, dy, dz] of [[1, 0, 4], [-1, 0, 7], [0, 1, 9], [1, 1, 5]] as const) w.set(xx + dx, yy + dy, top + dz, r < 0.5 ? MAT.flowerRed : MAT.leaf, obj);
+      } else {
+        // calabazas naranjas entre hojas
+        for (let dz = 0; dz < 4; dz++)
+          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (dx * dx + dy * dy + dz * dz * 1.5 <= 6) w.set(xx + dx, yy + dy, top + dz, MAT.fruitOrange, obj);
+        w.set(xx, yy, top + 4, MAT.wood, obj);
+        for (const [dx, dy] of [[3, 0], [-3, 1], [0, 3]] as const) w.set(xx + dx, yy + dy, top, MAT.leaf, obj);
+      }
+    }
+}
+
+/** Espantapájaros con camisa de cuadros y sombrero de paja. */
+function scarecrow(c: ZoneCtx, x: number, y: number): void {
+  const w = c.w, obj = c.add('espantapajaros', true), z = G;
+  for (let dz = 0; dz < 44; dz++) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) w.set(x + dx, y + dy, z + dz, MAT.bark, obj);
+  // brazos
+  for (let d = -9; d <= 10; d++) for (const dz of [32, 33]) w.set(x + d, y, z + dz, MAT.wood, obj);
+  // camisa
+  box(w, x - 4, y - 2, z + 22, x + 6, y + 4, z + 35, (xx, _yy, zz) => ((xx + zz) % 4 < 2 ? MAT.awningRed : MAT.awningWhite), obj);
+  // cabeza de saco y sombrero
+  box(w, x - 2, y - 2, z + 36, x + 4, y + 4, z + 42, MAT.bread, obj);
+  box(w, x - 5, y - 5, z + 42, x + 7, y + 7, z + 43, MAT.cheese, obj);
+  box(w, x - 2, y - 2, z + 43, x + 4, y + 4, z + 47, MAT.cheese, obj);
+}
+
+export function buildHorta(): ZoneBuild {
+  const c = new ZoneCtx('horta', 18, 18, G);
+  const PX = 16, PY = 16;
+  terrace(c, PX, PY, (x, y) => (smooth2(x, y, 26, 91) > 0.55 ? MAT.earth : hash3(x >> 1, y >> 1, 0, 43) < 0.006 ? MAT.flowerWhite : MAT.grass), { y: [8, 10] });
+  stairsY(c, 8, PY);
+  // muro de piedra con musgo al fondo
+  const muro = c.add('muro', true);
+  for (let i = 0; i < 16 * T; i++)
+    for (let z = G; z < G + 30; z++)
+      for (let d = 0; d < 4; d++) {
+        const mossy = hash3(i >> 1, z >> 1, d, 33) < (z > G + 18 ? 0.35 : 0.12);
+        c.w.set(i, 3 * T - 1 - d, z, z >= G + 28 ? MAT.curb : mossy ? MAT.moss : MAT.rubble, muro);
+      }
+  c.objects[muro - 1].box = [0, 0, G, 16 * T, 3 * T, G + 30];
+  // cobertizo de herramientas, valla, bancales y espantapájaros
+  shed(c.w, 4 * T, 3 * T + 4, G, c.add('cobertizo', true));
+  c.shelters.push([4, 5, 7, 6]);
+  fence(c.w, 3 * T - 2, 6 * T, G, 9 * T, 'y', c.add('valla', false));
+  bancal(c, 8 * T, 4 * T, 2 * T, T + 4, 'col', 1);
+  bancal(c, 11 * T, 4 * T, 2 * T, T + 4, 'tomate', 2);
+  bancal(c, 8 * T, 7 * T, 2 * T, T + 4, 'calabaza', 3);
+  bancal(c, 11 * T, 7 * T, 2 * T, T + 4, 'lechuga', 4);
+  scarecrow(c, 14 * T + 4, 6 * T);
+  tree(c.w, 4 * T + 8, 12 * T, G, c.add('arbol', true), 811, 1);
+  flowerbed(c.w, 9 * T, 11 * T, G, 2 * T, T, c.add('parterre', false), 812);
+  let s = 820;
+  for (const [x, y, r] of [[14, 12.5, 14], [6.5, 9.5, 10], [13, 10, 9]] as const) tallGrass(c.w, x * T, y * T, G, r, c.add('hierba', false), s++);
+  bench(c.w, 11 * T + 4, 13 * T + 6, G, 'x', c.add('banco', false), -1);
+  c.benches.push([11, 13]);
+  const lp = lamp(c.w, 14 * T + 8, 9 * T + 8, G, c.add('farola', false));
+  c.lights.push({ x: lp[0], y: lp[1], z: lp[2], kind: 'lamp' });
+  return c.finish([11, 10]);
 }

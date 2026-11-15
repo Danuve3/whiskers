@@ -28,6 +28,7 @@ import type { Outfit } from './sprites/player.ts';
 import { Population, bowlDistance, type Entry } from './world/population.ts';
 import { isFeeder, SERVINGS } from './sim/feeders.ts';
 import type { MomentId } from './sim/life.ts';
+import type { HappeningId } from './sim/rhythm.ts';
 import { pickTreasure, VISITORS, visitorData, type TreasureDef, type WorldNow } from './sim/collect.ts';
 import { generateAnimal, comfortDistance, species, hearts, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
@@ -525,7 +526,8 @@ export class Game {
       ent.m.dir = n.at[2];
       this.npcs.push({ nb, ent });
     }
-    this.refreshDecor();
+    this.structures = [];
+    this.refreshStructures();
     this.ambient = new Ambient(m, this.bounds);
     this.ambient.sea = this.zoneDef.sea ?? null;
     this.ambient.onFlap = () => sfx.flap();
@@ -568,7 +570,11 @@ export class Game {
         ref: d,
       });
     }
-    this.pop.feeders = placed.map((d) => ({ id: d.id, x: d.tx * TILE + 8, y: d.ty * TILE + 8, ref: d }));
+    this.pop.feeders = [
+      ...placed.map((d) => ({ id: d.id, x: d.tx * TILE + 8, y: d.ty * TILE + 8, ref: d })),
+      // el bebedero de piedra del puerto (proyecto del barrio) nunca se vacía
+      ...this.structures.filter((s) => s.id === 'bebedero-piedra').map((s) => ({ id: 'bebedero', x: s.tx * TILE + 8, y: s.ty * TILE + 8 })),
+    ];
   }
 
   /** Coloca decoración delante del jugador. */
@@ -669,7 +675,8 @@ export class Game {
     const Z = this.zoneDef;
     const decor = (this.world.meta?.placed ?? []).filter((d) => d.zone === this.zoneId).length;
     const here = this.world.animals.filter((a) => a.zone === this.zoneId).length;
-    if (here >= Z.cap + decor || now - last < Math.max(5, 12 - decor * 2) * 60_000) return null;
+    const fair = this.happening === 'mercadillo' ? 3 : 1;
+    if (here >= Z.cap + decor + (fair > 1 ? 2 : 0) || now - last < (Math.max(5, 12 - decor * 2) * 60_000) / fair) return null;
     st.lastArrival = now;
     const used = new Set(this.world.animals.map((a) => a.home.join(',')));
     const home = Z.homes.find((h) => !used.has(h.join(','))) ?? Z.homes[Math.floor(Math.random() * Z.homes.length)];
@@ -685,6 +692,38 @@ export class Game {
   request(e: Entry, act: Action, food: FoodId = 'pienso'): void {
     this.pending = { e, act, food, repath: 0 };
     this.cam.follow = true;
+  }
+
+  /** suceso del día activo (lo pone main) */
+  happening: HappeningId | null = null;
+  /** estructuras de los proyectos del barrio terminados en esta zona */
+  structures: (Drawable & { id: string; tx: number; ty: number })[] = [];
+
+  /** Coloca (o quita) las estructuras de los proyectos terminados de esta zona. */
+  refreshStructures(): void {
+    this.structures = [];
+    const P = this.world.meta?.projects ?? {};
+    const G = this.grid;
+    const place = (id: string, art: string, at: [number, number]) => {
+      const t = nearestWalkable(G, at[0], at[1]);
+      if (!t) return;
+      const x = t[0] * TILE + 8, y = t[1] * TILE + 8, z = G.height[t[1] * G.w + t[0]];
+      const img = decorSprite(art);
+      const sx = 2 * (x - y), sy = x + y - z;
+      this.structures.push({
+        id, tx: t[0], ty: t[1], box: [x - 7, y - 7, z, x + 7, y + 7, z + img.height], rect: [sx - img.width / 2, sy - img.height, img.width, img.height],
+        draw: (ctx, cx, cy) => ctx.drawImage(img, Math.round(sx - img.width / 2 - cx), Math.round(sy - img.height + 3 - cy)),
+      });
+    };
+    const Z = this.zoneDef;
+    if (this.zoneId === 'calle' && P.rascador?.done) place('rascador', 'rascador', [5, 16]);
+    if (this.zoneId === 'parque' && P.casetas?.done) {
+      place('caseta1', 'caseta', Z.homes[0]);
+      place('caseta2', 'caseta', Z.homes[1]);
+    }
+    if (this.zoneId === 'descampado' && P.refugio?.done) place('refugio', 'refugio', Z.homes[1] ?? Z.homes[0]);
+    if (this.zoneId === 'puerto' && P.bebedero?.done) place('bebedero-piedra', 'bebedero-piedra', [Z.entry[0] - 3, Z.entry[1]]);
+    this.refreshDecor();
   }
 
   /** tesoros escondidos en el suelo de esta zona */
@@ -752,7 +791,7 @@ export class Game {
 
   /** Sitios con nombre de la zona, para las costumbres de los animales. */
   private namedSpots(): { tile: [number, number]; place: string }[] {
-    const de: Record<ZoneId, string> = { calle: 'de tu calle', plaza: 'de la plaza', parque: 'de la Alameda', mercado: 'del mercado', descampado: 'del descampado', puerto: 'del puerto' };
+    const de: Record<ZoneId, string> = { calle: 'de tu calle', plaza: 'de la plaza', parque: 'de la Alameda', mercado: 'del mercado', descampado: 'del descampado', puerto: 'del puerto', horta: 'del huerto' };
     const z = de[this.zoneId];
     const out: { tile: [number, number]; place: string }[] = [];
     for (const b of this.zone.meta.benches) out.push({ tile: b, place: `junto al banco ${z}` });
@@ -1086,7 +1125,12 @@ export class Game {
       this.pop.update(dt, {
         grid: this.grid, hour: this.hour, raining: rain, now: Date.now(), wind: this.weather.wind, season: this.season, snow: this.snowCover,
         player: { x: this.player.m.x, y: this.player.m.y, moving: this.player.m.moving },
-        shelters: [...this.zone.meta.shelters, ...this.decor.filter((d) => d.id === 'caseta').map((d) => [d.tx - 0.5, d.ty - 0.5, d.tx + 1.5, d.ty + 1.5] as [number, number, number, number])], approaching: this.pending?.e.data.id ?? null,
+        shelters: [
+          ...this.zone.meta.shelters,
+          ...[...this.decor, ...this.structures].filter((d) => /caseta|sombrilla|braserito|refugio/.test(d.id)).map((d) => [d.tx - 0.5, d.ty - 0.5, d.tx + 1.5, d.ty + 1.5] as [number, number, number, number]),
+        ],
+        approaching: this.pending?.e.data.id ?? null,
+        mods: this.happening === 'reparto' && this.zoneId === 'mercado' ? { boxMul: 6 } : this.happening === 'mimos' ? { requestMul: 0.4 } : this.happening === 'siestas' ? { restMul: 1.6 } : undefined,
       });
     } else for (const e of this.pop.entries) e.ent.update(dt, this.grid);
     for (const e of this.pop.entries) {
@@ -1407,7 +1451,7 @@ export class Game {
         { box: [BX.x - 8, BX.y + 7, BX.z, BX.x + 8, BX.y + 8, BX.z + 10], rect: [bsx - 15, bsy - 11, 31, 26], draw: (ctx, cx, cy) => ctx.drawImage(front, Math.round(bsx - 15 - cx), Math.round(bsy - 11 - cy)) },
       );
     }
-    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent));
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.structures, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent));
     for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes

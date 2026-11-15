@@ -55,6 +55,7 @@ export const ZONE_FLAVORS: Record<string, ZoneFlavor> = {
   parque: { lead: 'flute', mode: LYDIAN, rootShift: 3, tempoMul: 0.92, meter: 4, extra: 'none', bellsMul: 1.3, padMul: 1.1 },
   mercado: { lead: 'marimba', rootShift: 5, tempoMul: 1.1, meter: 4, extra: 'shaker', bellsMul: 0.5, padMul: 0.7 },
   descampado: { lead: 'epiano', mode: DORIAN, rootShift: -3, tempoMul: 0.85, meter: 4, extra: 'none', bellsMul: 0.6, padMul: 1.2 },
+  horta: { lead: 'pluck', mode: LYDIAN, rootShift: 2, tempoMul: 0.95, meter: 6, extra: 'none', bellsMul: 1.4, padMul: 0.8 },
   puerto: { lead: 'harp', mode: AEOLIAN, rootShift: -5, tempoMul: 0.9, meter: 6, extra: 'drone', bellsMul: 0.7, padMul: 0.9 },
 };
 

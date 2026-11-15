@@ -42,7 +42,7 @@ export const SETS: SetDef[] = [
 ];
 
 const T = (id: string, name: string, set: string, zones: string[], rows: string[], key: Record<string, ColorName>, when?: TreasureDef['when']): TreasureDef => ({ id, name, set, zones, rows, key, when });
-const ALL = ['calle', 'plaza', 'parque', 'mercado', 'descampado', 'puerto'];
+const ALL = ['calle', 'plaza', 'parque', 'mercado', 'descampado', 'puerto', 'horta'];
 const autumn = (w: WorldNow) => w.season === 'otoño';
 export const TREASURES: TreasureDef[] = [
   T('vieira', 'Concha de vieira', 'conchas', ['puerto'], ['ooooo', 'oOoOo', '.ooo.', '..o..'], { o: 'tan', O: 'peach' }),
@@ -50,7 +50,7 @@ export const TREASURES: TreasureDef[] = [
   T('caracola', 'Caracola', 'conchas', ['puerto'], ['..pp.', '.pPpp', 'pPwPp', '.ppp.'], { p: 'pink', P: 'rose', w: 'cal4' }),
   T('cristal', 'Cristal de mar', 'conchas', ['puerto'], ['.gg.', 'gGwg', '.gg.'], { g: 'veg3', G: 'veg2', w: 'cal4' }),
   T('hoja-castano', 'Hoja de castaño', 'otono', ['parque', 'plaza', 'calle'], ['....o', '..ooO', '.oOo.', 'oOo..', 'd....'], { o: 'tile3', O: 'tile2', d: 'wood1' }, autumn),
-  T('bellota', 'Bellota', 'otono', ['parque'], ['.ddd.', 'dDdDd', '.bbb.', '.bBb.', '..b..'], { d: 'wood1', D: 'wood2', b: 'wood3', B: 'wood4' }, autumn),
+  T('bellota', 'Bellota', 'otono', ['parque', 'horta'], ['.ddd.', 'dDdDd', '.bbb.', '.bBb.', '..b..'], { d: 'wood1', D: 'wood2', b: 'wood3', B: 'wood4' }, autumn),
   T('erizo', 'Erizo de castaña', 'otono', ['parque', 'mercado'], ['g.g.g', '.ggg.', 'gGbGg', '.ggg.', 'g.g.g'], { g: 'veg3', G: 'veg2', b: 'wood1' }, autumn),
   T('hoja-roja', 'Hoja roja', 'otono', ['parque', 'plaza', 'calle', 'puerto'], ['..rr.', '.rRr.', 'rRrr.', '.rr..', 'd....'], { r: 'coral', R: 'tile1', d: 'wood1' }, autumn),
   T('pluma-paloma', 'Pluma de paloma', 'plumas', ALL, ['....n', '...nm', '..nm.', '.nm..', 'k....'], { n: 'stone3', m: 'stone2', k: 'ink2' }),
@@ -65,8 +65,8 @@ export const TREASURES: TreasureDef[] = [
   T('dedal', 'Dedal', 'cachivaches', ['descampado'], ['.mm.', 'mnmn', 'nmnm', 'mmmm'], { m: 'stone3', n: 'stone2' }),
   T('moneda', 'Moneda antigua', 'cachivaches', ['descampado', 'mercado'], ['.yyy.', 'yYkYy', 'yYkYy', '.yyy.'], { y: 'mustard', Y: 'butter', k: 'wood2' }),
   T('llavecita', 'Llavecita', 'cachivaches', ['descampado'], ['.yy....', 'y..yyyy', '.yy..y.'], { y: 'mustard' }),
-  T('margarita', 'Margarita', 'flores', ['parque', 'plaza'], ['.w.w.', 'wwyww', '.w.w.', '..g..', '..g..'], { w: 'cal4', y: 'mustard', g: 'veg2' }, (w) => w.season === 'primavera' || w.season === 'verano'),
-  T('amapola', 'Amapola', 'flores', ['parque'], ['.rr.', 'rkRr', '.rr.', '.g..', '.g..'], { r: 'coral', R: 'rose', k: 'ink2', g: 'veg2' }, (w) => w.season === 'primavera' || w.season === 'verano'),
+  T('margarita', 'Margarita', 'flores', ['parque', 'plaza', 'horta'], ['.w.w.', 'wwyww', '.w.w.', '..g..', '..g..'], { w: 'cal4', y: 'mustard', g: 'veg2' }, (w) => w.season === 'primavera' || w.season === 'verano'),
+  T('amapola', 'Amapola', 'flores', ['parque', 'horta'], ['.rr.', 'rkRr', '.rr.', '.g..', '.g..'], { r: 'coral', R: 'rose', k: 'ink2', g: 'veg2' }, (w) => w.season === 'primavera' || w.season === 'verano'),
   T('violeta', 'Violeta', 'flores', ['parque', 'plaza'], ['.ll.', 'lLyl', '.ll.', '..g.'], { l: 'lilac', L: 'plum', y: 'mustard', g: 'veg2' }, (w) => w.season === 'primavera'),
   T('camelia', 'Camelia', 'flores', ['parque', 'plaza', 'calle'], ['.pp.', 'pPpP', 'pPPp', '.pp.', '.gg.'], { p: 'pink', P: 'rose', g: 'veg2' }, (w) => w.season === 'invierno' || w.season === 'otoño'),
 ];

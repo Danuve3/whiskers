@@ -267,3 +267,4 @@ body:has(.sheet.open) .strip, body:has(.title-screen) .strip, body:has(.laserbar
 .playbar .tuto-x { pointer-events: auto; }
 .vignette.play { touch-action: none; cursor: crosshair; }
 .foodrow { flex-wrap: nowrap; }
+.happening { margin: calc(var(--u) * -1) calc(var(--u) * 4) calc(var(--u) * 2); color: #5e3f36; }

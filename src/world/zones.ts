@@ -3,7 +3,7 @@
 import type { Stats } from '../sim/progress.ts';
 import { hearts, type AnimalData } from '../sim/model.ts';
 
-export type ZoneId = 'calle' | 'plaza' | 'parque' | 'mercado' | 'descampado' | 'puerto';
+export type ZoneId = 'calle' | 'plaza' | 'parque' | 'mercado' | 'descampado' | 'puerto' | 'horta';
 
 export interface Exit {
   /** rectángulo de tiles [x0, y0, x1, y1) */
@@ -63,6 +63,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     exits: [
       { r: [20, 9, 22, 14], to: 'plaza', spawn: [21, 15] },
       { r: [2, 20, 20, 22], to: 'descampado', spawn: [17, 8] },
+      { r: [20, 3, 22, 6], to: 'horta', spawn: [17, 8] },
     ],
     breeds: ['labrador', 'beagle', 'caniche', 'pastor', 'galgo', 'galgoit', 'mainecoon', 'europeo', 'podenco'], cap: 6, initial: 2,
     ambient: { birds: 3 }, unlockHint: 'Conoce a 3 animales para que se abra la Alameda.',
@@ -85,6 +86,14 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     exits: [{ r: [16, 5, 18, 11], to: 'parque', spawn: [12, 21] }],
     breeds: ['podenco', 'mestizo', 'bodeguero', 'salchicha', 'esfinge', 'calico', 'negro', 'chihuahua'], cap: 6, initial: 2,
     ambient: { birds: 0.5 }, unlockHint: 'Haz 15 cuidados (comida, agua, curas o caricias) para descubrir el descampado.',
+  },
+  horta: {
+    id: 'horta', title: 'A Horta', blurb: 'El huerto del barrio: bancales, un espantapájaros y gatos al sol entre las coles.',
+    homes: [[6, 9], [10, 10], [13, 12], [5, 13], [15, 5]], entry: [16, 8],
+    npcs: [],
+    exits: [{ r: [16, 5, 18, 11], to: 'parque', spawn: [21, 4] }],
+    breeds: ['europeo', 'naranja', 'carey', 'bicolor', 'mastin', 'pastor', 'podenco', 'mestizo'], cap: 6, initial: 2,
+    ambient: { birds: 2 }, unlockHint: 'Termina un proyecto del barrio o conoce a 12 animales para descubrir el huerto.',
   },
   puerto: {
     id: 'puerto', title: 'O Porto', blurb: 'Barcas de colores, redes al sol y gaviotas. Aquí se pesca.',
@@ -113,6 +122,8 @@ export function zoneOpen(id: ZoneId, stats: Stats, animals: AnimalData[]): boole
       return best >= 3;
     case 'descampado':
       return care >= 15;
+    case 'horta':
+      return (stats.proyectos ?? 0) >= 1 || known >= 12;
     case 'puerto':
       return best >= 4 && known >= 6;
   }

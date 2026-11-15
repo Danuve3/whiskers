@@ -14,6 +14,7 @@ import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { MetaHost } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
 import { momentsGrid, lettersList, collectionsGrid } from './life.ts';
+import { HAPPENINGS, CHALLENGES, PROJECTS, taskProgress } from '../sim/rhythm.ts';
 
 // ---------------------------------------------------------------- Retratos
 export function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
@@ -207,9 +208,37 @@ export function openMissions(h: MetaHost): void {
         el('div', { class: 'txt' }, el('div', {}, m.text), el('div', { class: 'small' }, m.done ? `¡Hecho! · ${rewardText(m.reward)}` : `${p}/${m.n} · Recompensa: ${rewardText(m.reward)}`), bar)));
     }
   };
+  // el barrio: suceso de hoy, reto de la estación y proyectos
+  const S = h.stats as Record<string, number>;
+  const row = (title: string, sub: string, p: number, n: number, done: boolean, icon = 'misiones') => {
+    const bar = el('div', { class: 'bar food' }, el('i', {}));
+    (bar.firstChild as HTMLElement).style.width = `${Math.round((Math.min(p, n) / n) * 100)}%`;
+    sheet.body.append(el('div', { class: `item panel ${done ? 'done' : ''}` }, iconImg(done ? 'check' : icon, 'icon small'), el('div', { class: 'txt' }, el('div', {}, title), el('div', { class: 'small' }, sub), bar)));
+  };
+  const HS = h.meta.happening, H = HS && HAPPENINGS.find((x) => x.id === HS.id);
+  if (HS && H) {
+    sheet.body.append(el('div', { class: 'sub' }, `Hoy en el barrio · ${H.name}`));
+    sheet.body.append(el('div', { class: 'small center happening' }, H.text));
+    row(H.task.text, HS.done ? `¡Hecho! · ${rewardText(H.reward)}` : `${taskProgress(H.task, S, HS.start)}/${H.task.n} · Recompensa: ${rewardText(H.reward)}`, HS.done ? H.task.n : taskProgress(H.task, S, HS.start), H.task.n, HS.done);
+  }
   if (ms) {
     section('Hoy', ms.daily);
     section('Esta semana', ms.weekly);
+  }
+  const CS = h.meta.challenge, C = CS && Object.values(CHALLENGES).find((c) => CS.key.endsWith(c.id));
+  if (CS && C) {
+    sheet.body.append(el('div', { class: 'sub' }, `Reto de la estación · ${C.name}`));
+    const p = CS.done ? C.n : taskProgress(C, S, CS.start);
+    row(C.text, CS.done ? `¡Conseguido! · ${rewardText(C.reward)}` : `${p}/${C.n} · Premio exclusivo: ${rewardText(C.reward)}`, p, C.n, CS.done);
+  }
+  const PS = h.meta.projects ?? {};
+  const prs = PROJECTS.filter((pr) => PS[pr.id]);
+  if (prs.length) {
+    sheet.body.append(el('div', { class: 'sub' }, 'Proyectos del barrio'));
+    for (const pr of prs) {
+      const st = PS[pr.id], p = st.done ? pr.n : taskProgress(pr, S, st.start);
+      row(pr.name, st.done ? pr.done : `${pr.text} · ${p}/${pr.n}`, p, pr.n, st.done, 'decoracion');
+    }
   }
   sheet.body.append(el('div', { class: 'small center' }, 'Sin prisas: las misiones se renuevan cada día y cada semana.'));
   sheet.body.append(el('div', { class: 'footer' }, button('Cerrar', () => void sheet.close())));
@@ -265,10 +294,14 @@ export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward
 
 // ---------------------------------------------------------------- Decoración (lista)
 export const DECOR_NAMES: Record<string, { name: string; desc: string }> = {
-  comedero: { name: 'Comedero de madera', desc: 'Se llena solo de pienso cada mañana. Atrae animales.' },
+  comedero: { name: 'Comedero de madera', desc: '8 raciones de pienso: los animales comen solos. Tócalo para rellenarlo.' },
   bebedero: { name: 'Bebedero de barro', desc: 'Agua fresca para todo el día.' },
   'manta-cuadros': { name: 'Manta de cuadros', desc: 'Un sitio calentito para dormir.' },
   caseta: { name: 'Caseta', desc: 'Refugio para los días de lluvia.' },
+  calabaza: { name: 'Calabaza de otoño', desc: 'Premio del reto de otoño. Pura decoración, y qué bonita.' },
+  braserito: { name: 'Braserito', desc: 'Premio del reto de invierno. Los animales se acurrucan cerca.' },
+  macetero: { name: 'Macetero de flores', desc: 'Premio del reto de primavera. Huele a jardín.' },
+  sombrilla: { name: 'Sombrilla', desc: 'Premio del reto de verano. Da sombra y cobijo.' },
 };
 
 export function foodName(f: keyof typeof FOODS): string {

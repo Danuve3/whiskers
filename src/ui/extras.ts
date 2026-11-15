@@ -9,12 +9,19 @@ import { pickFish, tideAt, type FishCtx, type FishDef } from '../sim/fishing.ts'
 
 // ---------------------------------------------------------------- Decoración
 type Key = Record<string, ColorName | null>;
-const DK: Key = { '.': null, k: 'ink2', b: 'wood3', B: 'wood2', f: 'wood1', F: 'wood3', w: 'cal4', s: 'sky', S: 'water2', T: 'tile2', t: 'tile1', r: 'coral', R: 'rose', o: 'tile3', O: 'tile2' };
+const DK: Key = { '.': null, k: 'ink2', b: 'wood3', B: 'wood2', f: 'wood1', F: 'wood3', w: 'cal4', s: 'sky', S: 'water2', T: 'tile2', t: 'tile1', r: 'coral', R: 'rose', o: 'tile3', O: 'tile2', g: 'veg2', p: 'pink', P: 'rose', l: 'lilac', L: 'plum', y: 'mustard', Y: 'butter', m: 'stone3', n: 'stone2' };
 export const DECOR_ART: Record<string, string[]> = {
   comedero: ['....kkkkkkkk....', '...kbbbbbbbbk...', '..kBfFfFfFfFBk..', '.kBbFfFfFfFfbBk.', 'kbbbbbbbbbbbbbbk', 'kBBBBBBBBBBBBBBk', '.kkkkkkkkkkkkkk.'],
   bebedero: ['...kkkkkkkk...', '..kwwssssswk..', '.kTsSssssSsTk.', 'kTTTTTTTTTTTTk', '.kTttttttttTk.', '..kkkkkkkkkk..'],
   'manta-cuadros': ['......kkkk......', '....kkrRrRkk....', '..kkrRwrRwrRkk..', 'kkrRwrRrRwrRrRkk', '..kkRrRwrRrRkk..', '....kkrRrRkk....', '......kkkk......'],
   caseta: ['.......kk.......', '.....kkooKk.....'.replace('K', 'k'), '...kkooOOookk...', '.kkoooOOOOooookk', 'kOOOOOOOOOOOOOOk', '.kbbbbkkkkbbbbk.', '.kbbbk....kbbbk.', '.kbbbk....kbbbk.', '.kBBBkkkkkkBBBk.', '..kkkkkkkkkkkk..'],
+  rascador: ['.bbbbbbbbbbbbbb.', 'kBBBBBBBBBBBBBBk', '.kkkkkkkkkkkkkk.', '......kYbk......', '......kbYk......', '......kYbk......', '......kbYk......', '......kYbk......', '......kbYk......', '...kbbbbbbbbk...', '...kBBBBBBBBk...', '....kkkkkkkk....', '......kYbk......', '......kbYk.k....', '......kYbk.k....', '......kbYk.nn...', '......kYbk.nnk..', '......kbYk......', '......kYbk......', 'kbbbbbbbbbbbbbbk', 'kBBBBBBBBBBBBBBk', '.kkkkkkkkkkkkkk.'],
+  refugio: ['.......kkkkkkkk.......', '.....kkOOOOOOOOkk.....', '...kkOOoOOoOOoOOOkk...', '.kkOOoOOoOOoOOoOOOOkk.', 'kOOOOOOOOOOOOOOOOOOOOk', 'kkkkkkkkkkkkkkkkkkkkkk', '.kbk..............kbk.', '.kbk..............kbk.', '.kBkbbbbbbbbbbbbbbkBk.', '.kBkBBBBBBBBBBBBBBkBk.', '.kbkbbbbbbbbbbbbbbkbk.', '.kBkBBBBBBBBBBBBBBkBk.', '.kkkkkkkkkkkkkkkkkkkk.'],
+  'bebedero-piedra': ['....kkkkkkkk....', '..kkmmmmmmmmkk..', '.kmmsssssssSmmk.', 'kmmssSssssSSsmmk', 'knmmmmmmmmmmmmnk', '.knnnnnnnnnnnnk.', '..kkkkkkkkkkkk..'],
+  calabaza: ['.....gg.....', '....kgk.....', '..kkoookk...', '.koOooOook..', 'koOooOooOok.', 'koOooOooOok.', '.koOooOook..', '..kkkkkkk...'],
+  braserito: ['....r.y.r...', '...ryrryr...', '..kkkkkkkk..', '.knnnnnnnnk.', 'knmmmmmmmmnk', '.knnnnnnnnk.', '..k......k..', '.kk......kk.'],
+  macetero: ['.p.l..p.y.', 'pPglLpPgyY', '.gggggggg.', 'kOOOOOOOOk', '.kOOOOOOk.', '.kOooooOk.', '..kkkkkk..'],
+  sombrilla: ['.....kk.....', '...kkrwkk...', '.kkrwrwrwkk.', 'krwrwrwrwrwk', 'kkkkkkkkkkkk', '.....kk.....', '.....bk.....', '.....bk.....', '.....bk.....', '....kbbk....'],
 };
 export function decorSprite(id: string): HTMLCanvasElement {
   return matrix('decor-' + id, DECOR_ART[id] ?? DECOR_ART.comedero, DK);

@@ -17,6 +17,7 @@ import { rewardText, NEIGHBORS } from './sim/progress.ts';
 import { lifeLines, openTrickGame, openAdoption } from './ui/life.ts';
 import { openBrush, openBath } from './ui/games.ts';
 import { tideAt } from './sim/fishing.ts';
+import { HAPPENINGS, happeningFor, dayIndex, taskStart, taskProgress, CHALLENGES, seasonKey, PROJECTS, type Happening } from './sim/rhythm.ts';
 import { REQUEST_ACTION, REQUEST_BONUS, MOMENTS, nextTrick, pickMother, makeLitter, adoptionCandidate, letterText, ADOPTERS } from './sim/life.ts';
 import { makeLook } from './sprites/breeds.ts';
 import { SETS, setProgress, VISITORS } from './sim/collect.ts';
@@ -84,6 +85,7 @@ const host: MetaHost = {
 };
 const check = () => {
   evaluate(host);
+  rhythm();
   // zonas que se abren
   const open = (W.meta.zonesOpen ??= ['calle']);
   for (const id of Object.keys(ZONES) as ZoneId[]) {
@@ -117,6 +119,66 @@ function card(a: (typeof W.animals)[number]) {
     bump(host, 'renombres');
     check();
   }, extras);
+}
+
+// ---------------------------------------------------------------- Ritmo del barrio
+/** Suceso del día, reto de la estación y proyectos: se comprueban con cada cambio. */
+function rhythm(): void {
+  if (shot) return;
+  const now = Date.now();
+  const open = W.meta.zonesOpen ?? ['calle'];
+  const S = W.stats as Record<string, number>;
+  // suceso de hoy
+  const day = dayIndex(now);
+  if (W.meta.happening?.day !== day) {
+    const H = happeningFor(day, open);
+    W.meta.happening = { day, id: H.id, start: taskStart(H.task, S), done: false };
+    startHappening(H);
+    setTimeout(() => toast(`Hoy en el barrio · ${H.name}: ${H.text}`, 6500), 2500);
+  }
+  const HS = W.meta.happening;
+  const H = HAPPENINGS.find((x) => x.id === HS.id);
+  if (H && !HS.done && taskProgress(H.task, S, HS.start) >= H.task.n) {
+    HS.done = true;
+    giveReward(host, H.reward);
+    toast(`¡${H.name}: hecho! Premio: ${rewardText(H.reward)}.`, 4500);
+    haptic([10, 40, 10]);
+  }
+  game.happening = H && !HS.done ? H.id : null;
+  // reto de la estación
+  const C = CHALLENGES[game.season];
+  const key = seasonKey(now, game.season);
+  if (W.meta.challenge?.key !== key) W.meta.challenge = { key, start: taskStart(C, S), done: false };
+  const CS = W.meta.challenge;
+  if (!CS.done && taskProgress(C, S, CS.start) >= C.n) {
+    CS.done = true;
+    giveReward(host, C.reward);
+    toast(`¡Reto de la estación conseguido: ${C.name}! Premio exclusivo: ${rewardText(C.reward)}.`, 5500);
+    haptic([16, 60, 16]);
+  }
+  // proyectos del barrio (empiezan cuando su zona se abre)
+  const P = (W.meta.projects ??= {});
+  for (const pr of PROJECTS) {
+    if (!open.includes(pr.zone)) continue;
+    P[pr.id] ??= { start: taskStart(pr, S), done: false };
+    if (!P[pr.id].done && taskProgress(pr, S, P[pr.id].start) >= pr.n) {
+      P[pr.id].done = true;
+      bump(host, 'proyectos');
+      toast(`¡Proyecto del barrio terminado! ${pr.done}`, 6000);
+      haptic([16, 60, 16, 60, 16]);
+      sfx.gift();
+      game.refreshStructures();
+    }
+  }
+}
+
+/** Lo que cambia al empezar un suceso. */
+function startHappening(H: Happening): void {
+  if (H.id === 'banos') {
+    // unos cuantos perros de la plaza amanecen embarrados
+    let n = 0;
+    for (const a of W.animals) if (a.zone === 'plaza' && species(a) === 'dog' && n++ < 3) a.muddy = true;
+  }
 }
 
 // ---------------------------------------------------------------- Vida propia de los animales
@@ -267,6 +329,7 @@ game.events = {
     check();
   },
   moment: (id, e) => {
+    bump(host, `momento-${id}`);
     const M = (W.meta.moments ??= {});
     const first = !M[id];
     M[id] = { n: (M[id]?.n ?? 0) + 1, first: M[id]?.first ?? Date.now() };
@@ -321,6 +384,7 @@ game.events = {
     }
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     bump(host, key);
+    if (act === 'heal' && game.happening === 'veterinaria') e.data.trust = Math.min(5, e.data.trust + res.trustGain);
     if (res.trustGain > 0 || res.heartUp) game.floatTrust(e, res.heartUp);
     fulfil(e, act);
     // vibración suave: ronroneo al acariciar, latido al ganar un corazón
@@ -407,7 +471,7 @@ const fishBtn = button(el('span', { style: 'display:flex;align-items:center;gap:
     const F = (W.meta.fish ??= {});
     const first = !F[f.id];
     F[f.id] = (F[f.id] ?? 0) + 1;
-    if (f.food) W.inventory[f.food.id] = (W.inventory[f.food.id] ?? 0) + f.food.n;
+    if (f.food) W.inventory[f.food.id] = (W.inventory[f.food.id] ?? 0) + f.food.n * (game.happening === 'sardinas' ? 2 : 1);
     bump(host, 'pesca');
     if (first) toast(`Nueva captura para tu colección: ${f.name}.`);
     check();
@@ -489,6 +553,7 @@ void (async () => {
   }
   game.start();
   evaluate(host);
+  rhythm();
   // vida propia: camadas, adopciones y cartas (cada medio minuto)
   if (!shot) {
     setTimeout(lifeTick, 8000);

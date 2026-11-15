@@ -146,6 +146,8 @@ export interface WorldCtx {
   wind: number;
   season: Season;
   snow: number;
+  /** ajustes del suceso del día (más cajas, más peticiones, más siestas…) */
+  mods?: { boxMul?: number; requestMul?: number; restMul?: number };
   now: number;
   player: { x: number; y: number; moving: boolean };
   shelters: [number, number, number, number][];
@@ -385,7 +387,7 @@ export class Population {
     if (this.request && w.now > this.request.until) this.clearRequest();
     this.nextRequest -= dt;
     if (!this.request && this.nextRequest <= 0) {
-      this.nextRequest = 45 + Math.random() * 60;
+      this.nextRequest = (45 + Math.random() * 60) * (w.mods?.requestMul ?? 1);
       const c = this.entries.filter((e) => !this.busy(e) && this.awake(e, w.hour) && e.brain.mode !== 'sleep' && tdist(e.ent.m.x, e.ent.m.y, w.player.x, w.player.y) < 9);
       const e = c[Math.floor(Math.random() * c.length)];
       const R = e && pickRequest(e.data, w.now, Math.random);
@@ -869,7 +871,7 @@ export class Population {
       this.ev.moment?.(B.moment, e);
       return;
     }
-    if (cat && !w.raining && !this.box && Math.random() < 0.025) {
+    if (cat && !w.raining && !this.box && Math.random() < 0.025 * (w.mods?.boxMul ?? 1)) {
       A.m.stop();
       this.box = { x: A.m.x, y: A.m.y, z: A.m.z, e };
       A.play('sit');
@@ -882,7 +884,7 @@ export class Population {
     }
     // --- vida normal
     const r = Math.random();
-    const restW = D.personality === 'dormilon' ? 0.55 : 0.3;
+    const restW = Math.min(0.8, (D.personality === 'dormilon' ? 0.55 : 0.3) * (w.mods?.restMul ?? 1));
     if (r < restW) {
       if (D.personality === 'dormilon' && tdist(A.m.x, A.m.y, D.home[0] * TILE + 8, D.home[1] * TILE + 8) > 1.2) {
         this.go(e, D.home[0], D.home[1], sp.walk);

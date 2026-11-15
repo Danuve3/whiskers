@@ -3,12 +3,12 @@
 // alto vuelve a dejar al jugador encerrado.
 import { describe, it, expect } from 'vitest';
 import { buildPlaza } from '../art/zones/plaza.ts';
-import { buildCalle, buildParque, buildMercado, buildDescampado, buildPuerto } from '../art/zones/barrio.ts';
+import { buildCalle, buildParque, buildMercado, buildDescampado, buildPuerto, buildHorta } from '../art/zones/barrio.ts';
 import { ZONES, type ZoneId } from '../src/world/zones.ts';
 import { findPath, nearestWalkable, type Grid } from '../src/world/path.ts';
 
 const BUILDERS: Record<ZoneId, () => ReturnType<typeof buildPlaza>> = {
-  plaza: buildPlaza, calle: buildCalle, parque: buildParque, mercado: buildMercado, descampado: buildDescampado, puerto: buildPuerto,
+  plaza: buildPlaza, calle: buildCalle, parque: buildParque, mercado: buildMercado, descampado: buildDescampado, puerto: buildPuerto, horta: buildHorta,
 };
 
 describe('zonas transitables', () => {

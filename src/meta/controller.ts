@@ -32,6 +32,10 @@ export interface MetaState {
   /** tesoros encontrados (id → veces) y colecciones completadas */
   treasures?: Record<string, number>;
   setsDone?: string[];
+  /** ritmo del barrio: suceso de hoy, reto de la estación y proyectos */
+  happening?: { day: number; id: string; start: number; done: boolean };
+  challenge?: { key: string; start: number; done: boolean };
+  projects?: Record<string, { start: number; done: boolean }>;
   /** capturas de pesca (id → veces) */
   fish?: Record<string, number>;
   /** casilla del jugador al guardar (se vuelve ahí al abrir el juego) */
