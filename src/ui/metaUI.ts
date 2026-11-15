@@ -1,6 +1,6 @@
 // Interfaz de progreso: HUD, álbum (razas, animales, vitrina), logros, misiones,
 // diálogos con los vecinos y aviso de logro con animación.
-import { el, button, iconImg, Sheet } from './kit.ts';
+import { el, button, iconImg, Sheet, haptic } from './kit.ts';
 import { heartsRow } from './animalUI.ts';
 import { dataURL } from './art.ts';
 import { getFrames } from '../sprites/animals.ts';
@@ -83,6 +83,7 @@ function next(): void {
   }
   showing = true;
   sfx.achievement();
+  haptic([10, 40, 10, 40, 24]);
   if (!bannerBox) {
     bannerBox = el('div', { class: 'banners' });
     document.getElementById('ui')!.append(bannerBox);

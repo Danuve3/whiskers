@@ -23,6 +23,8 @@ export interface MetaState {
   /** pistas contextuales ya mostradas y zonas ya visitadas */
   hints?: string[];
   visited?: string[];
+  /** casilla del jugador al guardar (se vuelve ahí al abrir el juego) */
+  pos?: [number, number];
   /** cosas que se han usado alguna vez (mapa, armario…) para las pistas */
   used?: string[];
 }

@@ -264,6 +264,10 @@ export class Game {
     this.zone = za;
     this.zoneId = id;
     this.zoneDef = ZONES[id];
+    // precargar las zonas vecinas en segundo plano: el siguiente cambio de zona será inmediato
+    setTimeout(() => {
+      for (const ex of ZONES[id].exits) void loadZone(ex.to).catch(() => undefined);
+    }, 1500);
     const m = this.zone.meta;
     this.grid = { w: m.tilesW, h: m.tilesH, walk: m.walk, height: m.height };
     const seasonKey = this.season === 'otoño' ? 'otono' : this.season;
@@ -317,7 +321,8 @@ export class Game {
       });
     }
     // jugador
-    const sp = spawn ?? m.spawn;
+    const sp0 = spawn ?? m.spawn;
+    const sp = nearestWalkable(this.grid, sp0[0], sp0[1]) ?? sp0;
     const outfit = this.player.outfit;
     this.player = new Player(sp[0], sp[1], this.grid, outfit);
     // animales de esta zona
@@ -405,7 +410,8 @@ export class Game {
       document.body.append(this.fadeEl);
     }
     this.fadeEl.classList.add('on');
-    await new Promise((r) => setTimeout(r, 380));
+    // con la zona ya precargada basta un fundido corto
+    await Promise.all([new Promise((r) => setTimeout(r, 200)), loadZone(to)]);
     await this.enterZone(to, spawn);
     this.events.zoneChanged?.(to);
     this.fadeEl.classList.remove('on');

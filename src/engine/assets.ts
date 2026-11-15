@@ -45,7 +45,19 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function loadZone(name: string): Promise<ZoneAssets> {
+const zoneCache = new Map<string, Promise<ZoneAssets>>();
+/** Carga (una sola vez) el arte de una zona; las vecinas se precargan para que cambiar de zona sea instantáneo. */
+export function loadZone(name: string): Promise<ZoneAssets> {
+  let p = zoneCache.get(name);
+  if (!p) {
+    p = fetchZone(name);
+    zoneCache.set(name, p);
+    p.catch(() => zoneCache.delete(name));
+  }
+  return p;
+}
+
+async function fetchZone(name: string): Promise<ZoneAssets> {
   const base = import.meta.env.BASE_URL + 'gen/';
   const json = await (await fetch(base + name + '.json')).json();
   const pages = await Promise.all((json.atlas as string[]).map((f) => loadImage(base + f)));

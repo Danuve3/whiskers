@@ -1,5 +1,5 @@
 // Menú radial sobre un animal, ficha con su información y avisos suaves.
-import { el, button, iconImg, Sheet } from './kit.ts';
+import { el, button, iconImg, Sheet, onBack } from './kit.ts';
 import { heartIcon } from './art.ts';
 import { canDo, hearts, FOODS, PERSONALITIES, type Action, type FoodId } from '../sim/model.ts';
 import { BREED_BY_ID } from '../sprites/breeds.ts';
@@ -181,9 +181,11 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   follow();
   game.focusOn(e);
   requestAnimationFrame(() => root.classList.add('open'));
+  const offBack = onBack(() => closeRadial());
   current = {
     root,
     close: () => {
+      offBack();
       alive = false;
       game.focusOn(null);
       root.classList.remove('open');

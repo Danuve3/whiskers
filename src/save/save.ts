@@ -9,6 +9,10 @@ export interface Settings {
   sfx: number;
   ambient: number;
   muted: boolean;
+  /** vibración suave (por defecto, sí) */
+  haptics?: boolean;
+  /** recordatorio diario (por defecto, no) */
+  reminder?: boolean;
 }
 
 export interface SaveData {

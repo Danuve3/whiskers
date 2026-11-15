@@ -1,7 +1,7 @@
 import './styles.css';
 import { registerPWA } from './pwa.ts';
 import { Game, newWorld, npcOutfit, PORTAL, type WorldState } from './game.ts';
-import { setupUI, button, Sheet, el } from './ui/kit.ts';
+import { setupUI, button, Sheet, el, setHaptics, haptic } from './ui/kit.ts';
 import { openEditor } from './ui/editor.ts';
 import { load, store, type SaveData } from './save/save.ts';
 import { openRadial, closeRadial, openCard, toast } from './ui/animalUI.ts';
@@ -30,8 +30,12 @@ const clima = params.get('clima');
 
 setupUI();
 const save: SaveData = load();
+setHaptics(save.settings.haptics !== false);
 const persist = () => {
   save.lastSeen = Date.now();
+  // dónde estabas: al volver apareces en la misma zona y casilla
+  const g = (window as unknown as { __game?: Game }).__game;
+  if (g?.grid && !shot) (save.world as unknown as WorldState).meta.pos = [g.player.m.tx, g.player.m.ty];
   store(save);
 };
 
@@ -134,6 +138,10 @@ game.events = {
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     bump(host, key);
     if (res.trustGain > 0 || res.heartUp) game.floatTrust(e, res.heartUp);
+    // vibración suave: ronroneo al acariciar, latido al ganar un corazón
+    if (res.heartUp) haptic([16, 60, 16]);
+    else if (act === 'pet') haptic([6, 40, 6, 40, 6]);
+    else haptic(8);
     if (act === 'feed') tuto?.event('fed');
     // estadísticas de contexto (para logros y misiones)
     const h = new Date().getHours();
@@ -157,6 +165,7 @@ game.events = {
     check();
   }),
   giftTap: (i) => {
+    haptic(12);
     sfx.gift();
     toast(collectGift(host, i));
     check();
@@ -217,7 +226,7 @@ function decorSheet() {
 void (async () => {
   await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
   const zona = params.get('zona') as ZoneId | null;
-  await game.init(shot ? zona ?? 'plaza' : (W.meta.zone as ZoneId | undefined) ?? 'calle');
+  await game.init(shot ? zona ?? 'plaza' : (W.meta.zone as ZoneId | undefined) ?? 'calle', shot ? undefined : W.meta.pos);
   // las necesidades bajan muy despacio con el tiempo real
   let lastDecay = Date.now();
   setInterval(() => {

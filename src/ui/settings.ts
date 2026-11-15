@@ -1,5 +1,5 @@
 // Ajustes: mezclador (música, efectos, ambiente), silencio y exportar/importar la partida.
-import { Sheet, el, button } from './kit.ts';
+import { Sheet, el, button, setHaptics, haptic } from './kit.ts';
 import { exportJSON, importJSON, type SaveData } from '../save/save.ts';
 import { toast } from './animalUI.ts';
 
@@ -18,6 +18,12 @@ export function openSettings(save: SaveData, applyAudio: () => void, onImport: (
     S.muted = !S.muted;
     mute.textContent = S.muted ? 'Activar sonido' : 'Silenciar';
     applyAudio();
+  });
+  const vib = button(S.haptics === false ? 'Vibración: no' : 'Vibración: sí', () => {
+    S.haptics = S.haptics === false;
+    setHaptics(S.haptics);
+    vib.textContent = S.haptics ? 'Vibración: sí' : 'Vibración: no';
+    haptic(12);
   });
   const exp = button('Exportar partida', () => {
     const blob = new Blob([exportJSON(save)], { type: 'application/json' });
@@ -41,7 +47,7 @@ export function openSettings(save: SaveData, applyAudio: () => void, onImport: (
   const close = button('Cerrar', () => void sheet.close());
   sheet.body.append(
     slider('Música', 'music'), slider('Efectos', 'sfx'), slider('Ambiente', 'ambient'),
-    el('div', { class: 'row center' }, mute),
+    el('div', { class: 'row center' }, mute, vib),
     el('div', { class: 'row center' }, exp, imp, file),
     el('div', { class: 'footer' }, close),
   );
