@@ -6,7 +6,7 @@ import { buildHouse, type HouseInfo, type HouseSpec } from '../modules/house.ts'
 import { resetDecals } from '../decals.ts';
 import type { ZoneBuild, ZoneObject } from './plaza.ts';
 import type { FountainInfo } from '../modules/props.ts';
-import { blockSolids } from './collide.ts';
+import { blockSolids, blockEdges } from './collide.ts';
 
 export const T = 16;
 
@@ -78,9 +78,10 @@ export class ZoneCtx {
   finish(spawn: [number, number]): ZoneBuild {
     for (const o of this.objects) if (o.box[3] === 0) o.box = this.w.objectBounds(o.id)!;
     blockSolids(this.w, this.objects, this.TW, this.TH, this.height, this.walk);
+    const edges = blockEdges(this.w, this.objects, this.TW, this.TH, this.height, this.walk);
     return {
       name: this.name, world: this.w, tilesW: this.TW, tilesH: this.TH, objects: this.objects, lights: this.lights, smoke: this.smoke,
-      steam: this.steam, lines: this.lines, shelters: this.shelters, fountains: this.fountains, height: this.height, walk: this.walk, spawn, benches: this.benches,
+      steam: this.steam, lines: this.lines, shelters: this.shelters, fountains: this.fountains, height: this.height, walk: this.walk, edges, spawn, benches: this.benches,
     };
   }
 }

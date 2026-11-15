@@ -60,7 +60,7 @@ function zone(build: () => ReturnType<typeof buildPlaza>) {
         return { sprite: o.name, night: o.s.night ? o.name + '@noche' : null, snow: o.s.snow ? o.name + '@nieve' : null, seasons, box: src.box, occluder: src.occluder, kind: src.name };
       }),
       lights: z.lights, smoke: z.smoke, steam: z.steam, lines: z.lines, shelters: z.shelters, fountains: z.fountains,
-      height: z.height, walk: z.walk, spawn: z.spawn, benches: z.benches,
+      height: z.height, walk: z.walk, edges: z.edges ?? [], spawn: z.spawn, benches: z.benches,
     },
   };
   writeFileSync(OUT + `${z.name}.json`, JSON.stringify(json));

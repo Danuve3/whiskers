@@ -26,6 +26,8 @@ export interface ZoneMeta {
   fountains: { spouts: [number, number, number, number, number][]; basin: { cx: number; cy: number; r: number; z: number }; bowl: { cx: number; cy: number; r: number; z: number } }[];
   height: number[];
   walk: number[];
+  /** bordes bloqueados entre casillas (bit 1 = +x, bit 2 = +y) */
+  edges?: number[];
   spawn: [number, number];
   benches: [number, number][];
 }

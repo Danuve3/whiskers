@@ -277,7 +277,7 @@ export class Game {
       for (const ex of ZONES[id].exits) void loadZone(ex.to).catch(() => undefined);
     }, 1500);
     const m = this.zone.meta;
-    this.grid = { w: m.tilesW, h: m.tilesH, walk: m.walk, height: m.height };
+    this.grid = { w: m.tilesW, h: m.tilesH, walk: m.walk, height: m.height, edges: m.edges };
     const seasonKey = this.season === 'otoño' ? 'otono' : this.season;
     this.objects = [];
     this.lights = [];

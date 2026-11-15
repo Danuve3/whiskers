@@ -6,7 +6,7 @@ import { box, Frame } from '../voxel/shapes.ts';
 import { buildHouse, GROUND_Z, type HouseInfo, type HouseSpec } from '../modules/house.ts';
 import { fountain, lamp, bench, tree, kiosk, planter, type FountainInfo } from '../modules/props.ts';
 import { DECALS, resetDecals } from '../decals.ts';
-import { blockSolids } from './collide.ts';
+import { blockSolids, blockEdges } from './collide.ts';
 
 export const T = 16;
 
@@ -34,6 +34,8 @@ export interface ZoneBuild {
   /** altura (px) y transitabilidad por tile */
   height: number[];
   walk: number[];
+  /** bordes bloqueados entre casillas (bit 1 = +x, bit 2 = +y) */
+  edges?: number[];
   spawn: [number, number];
   benches: [number, number][];
 }
@@ -95,6 +97,8 @@ export function buildPlaza(): ZoneBuild {
 
   // escalera hundida hacia la calle de abajo (con musgo en los muros laterales)
   const SX0 = 14 * T, SX1 = 16 * T, SY0 = PL - 36;
+  // los muros laterales son objetos (no suelo): así el de delante tapa a quien baja la escalera
+  const wallL = add('muro-escalera', false), wallR = add('muro-escalera', false);
   for (let y = SY0; y < PL; y++)
     for (let x = SX0 - 4; x < SX1 + 4; x++) {
       const side = x < SX0 || x >= SX1;
@@ -103,7 +107,7 @@ export function buildPlaza(): ZoneBuild {
       for (let z = 4; z < G; z++) {
         if (side) {
           const mossy = hash3(x, y >> 1, z >> 1, 9) < 0.3 && z > top - 10;
-          w.set(x, y, z, mossy ? MAT.moss : MAT.rubble, 0);
+          w.set(x, y, z, mossy ? MAT.moss : MAT.rubble, x < SX0 ? wallL : wallR);
         } else if (z >= top) w.set(x, y, z, 0, 0);
         else w.set(x, y, z, z === top - 1 ? ((y - SY0) % 4 === 0 ? MAT.curb : MAT.granite) : MAT.rubble, 0);
       }
@@ -261,9 +265,10 @@ export function buildPlaza(): ZoneBuild {
   walk[6 * TW + 18] = 0; // tronco árbol 1 (296,108)
   walk[18 * TW + 6] = 0; // tronco árbol 2 (100,290)
   blockSolids(w, objects, TW, TH, height, walk);
+  const edges = blockEdges(w, objects, TW, TH, height, walk);
 
   return {
     name: 'plaza', world: w, tilesW: TW, tilesH: TH, objects, lights, smoke, steam, lines, shelters, fountains,
-    height, walk, spawn: [12, 15], benches,
+    height, walk, edges, spawn: [12, 15], benches,
   };
 }

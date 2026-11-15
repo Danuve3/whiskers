@@ -54,6 +54,8 @@ function terrace(c: ZoneCtx, plx: number, ply: number, surface: (x: number, y: n
 function stairsY(c: ZoneCtx, tx0: number, ply: number): void {
   const w = c.w;
   const SX0 = tx0 * T, SX1 = (tx0 + 2) * T, PL = ply * T, SY0 = PL - 36;
+  // muros laterales como objetos: el de delante tapa a quien baja la escalera
+  const wallL = c.add('muro-escalera', false), wallR = c.add('muro-escalera', false);
   for (let y = SY0; y < PL; y++)
     for (let x = SX0 - 4; x < SX1 + 4; x++) {
       const side = x < SX0 || x >= SX1;
@@ -61,7 +63,7 @@ function stairsY(c: ZoneCtx, tx0: number, ply: number): void {
       const top = G - 4 * step;
       for (let z = 4; z < G + 12; z++) {
         if (side) {
-          if (z < G) w.set(x, y, z, hash3(x, y >> 1, z >> 1, 9) < 0.3 && z > top - 10 ? MAT.moss : MAT.rubble, 0);
+          if (z < G) w.set(x, y, z, hash3(x, y >> 1, z >> 1, 9) < 0.3 && z > top - 10 ? MAT.moss : MAT.rubble, x < SX0 ? wallL : wallR);
           else w.set(x, y, z, 0, 0);
         } else if (z >= top) w.set(x, y, z, 0, 0);
         else w.set(x, y, z, z === top - 1 ? ((y - SY0) % 4 === 0 ? MAT.curb : MAT.granite) : MAT.rubble, 0);
@@ -80,6 +82,7 @@ function stairsY(c: ZoneCtx, tx0: number, ply: number): void {
 function stairsX(c: ZoneCtx, ty0: number, plx: number): void {
   const w = c.w;
   const SY0 = ty0 * T, SY1 = (ty0 + 2) * T, PL = plx * T, SX0 = PL - 36;
+  const wallL = c.add('muro-escalera', false), wallR = c.add('muro-escalera', false);
   for (let x = SX0; x < PL; x++)
     for (let y = SY0 - 4; y < SY1 + 4; y++) {
       const side = y < SY0 || y >= SY1;
@@ -87,7 +90,7 @@ function stairsX(c: ZoneCtx, ty0: number, plx: number): void {
       const top = G - 4 * step;
       for (let z = 4; z < G + 12; z++) {
         if (side) {
-          if (z < G) w.set(x, y, z, hash3(x >> 1, y, z >> 1, 9) < 0.3 && z > top - 10 ? MAT.moss : MAT.rubble, 0);
+          if (z < G) w.set(x, y, z, hash3(x >> 1, y, z >> 1, 9) < 0.3 && z > top - 10 ? MAT.moss : MAT.rubble, y < SY0 ? wallL : wallR);
           else w.set(x, y, z, 0, 0);
         } else if (z >= top) w.set(x, y, z, 0, 0);
         else w.set(x, y, z, z === top - 1 ? ((x - SX0) % 4 === 0 ? MAT.curb : MAT.granite) : MAT.rubble, 0);

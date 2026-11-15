@@ -15,7 +15,7 @@ describe('zonas transitables', () => {
   for (const id of Object.keys(BUILDERS) as ZoneId[]) {
     it(`${id}: todo conectado en ambos sentidos`, () => {
       const b = BUILDERS[id]();
-      const g: Grid = { w: b.tilesW, h: b.tilesH, walk: b.walk, height: b.height };
+      const g: Grid = { w: b.tilesW, h: b.tilesH, walk: b.walk, height: b.height, edges: b.edges };
       const def = ZONES[id];
       const pts: [string, number, number][] = [];
       const add = (name: string, x: number, y: number) => {

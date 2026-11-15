@@ -1,6 +1,6 @@
 // Comportamiento de los animales: horarios, confianza, comida, lluvia, seguir, travesuras.
 import { TILE, type Box } from '../engine/iso.ts';
-import { findPath, nearestWalkable, walkable, type Grid } from './path.ts';
+import { findPath, nearestWalkable, walkable, frontEdges, type Grid } from './path.ts';
 import { Animal, dirFromDelta, type Drawable } from './entities.ts';
 import { makeLook } from '../sprites/breeds.ts';
 import { warmAnimal } from '../sprites/workerClient.ts';
@@ -81,7 +81,22 @@ export class Population {
   /** comederos, bebederos, mantas y casetas colocados */
   feeders: { id: string; x: number; y: number; ref?: PlacedFeeder }[] = [];
 
-  constructor(private grid: Grid, private ev: PopulationEvents) {}
+  private edges: Uint8Array;
+  constructor(private grid: Grid, private ev: PopulationEvents) {
+    this.edges = frontEdges(grid);
+  }
+
+  /** Casilla transitable más cercana que no esté en el borde delantero. */
+  private inner(x: number, y: number): [number, number] | null {
+    for (let r = 1; r < 5; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const nx = x + dx, ny = y + dy;
+          if (walkable(this.grid, nx, ny) && !this.edges[ny * this.grid.w + nx]) return [nx, ny];
+        }
+    return null;
+  }
 
   add(data: AnimalData, tx?: number, ty?: number): Entry {
     const look = makeLook(data.breed, data.variant, data.seed, data.rare);
@@ -96,10 +111,14 @@ export class Population {
   }
 
   private go(e: Entry, tx: number, ty: number, speed: number): boolean {
-    const t = nearestWalkable(this.grid, Math.round(tx), Math.round(ty));
+    let t = nearestWalkable(this.grid, Math.round(tx), Math.round(ty));
     if (!t) return false;
+    // los perros grandes no se paran ni pasean por el borde delantero (sobresaldrían por encima de la pared)
+    const big = e.ent.look.shape.legH > 12;
+    if (big && this.edges[t[1] * this.grid.w + t[0]]) t = this.inner(t[0], t[1]) ?? t;
     const blocked = (x: number, y: number) => this.entries.some((o) => o !== e && !o.ent.m.moving && o.ent.m.tx === x && o.ent.m.ty === y);
-    const path = findPath(this.grid, e.ent.m.tx, e.ent.m.ty, t[0], t[1], blocked);
+    const cost = big ? (x: number, y: number) => (this.edges[y * this.grid.w + x] ? 2.5 : 0) : undefined;
+    const path = findPath(this.grid, e.ent.m.tx, e.ent.m.ty, t[0], t[1], blocked, cost);
     if (!path || path.length < 2) return false;
     e.ent.m.speed = speed;
     e.ent.m.setPath(path);
