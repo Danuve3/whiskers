@@ -5,6 +5,7 @@ import { toast } from './animalUI.ts';
 import { ZONES, zoneOpen, type ZoneId, type Exit } from '../world/zones.ts';
 import type { Game } from '../game.ts';
 import * as sfx from '../audio/sfx.ts';
+import { needyByZone } from './assist.ts';
 
 function uiUnit(): number {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 2;
@@ -120,6 +121,7 @@ export function openMap(game: Game): void {
   const sheet = new Sheet('El barrio', 'map');
   const order: ZoneId[] = ['calle', 'plaza', 'parque', 'mercado', 'descampado', 'puerto'];
   const list = el('div', { class: 'zones' });
+  const needy = needyByZone(game.world.animals);
   for (const id of order) {
     const z = ZONES[id];
     const here = id === game.zoneId;
@@ -133,7 +135,9 @@ export function openMap(game: Game): void {
         }, 'primary')
         : iconImg('candado', 'icon small');
     list.append(el('div', { class: `zone-row${here ? ' current' : ''}${open ? '' : ' locked'}` },
-      el('div', { class: 'info' }, el('div', { class: 'name' }, z.title), el('div', { class: 'small' }, open ? z.blurb : z.unlockHint)),
+      el('div', { class: 'info' }, el('div', { class: 'name' }, z.title),
+        open && needy[id] ? el('div', { class: 'needy' }, iconImg('comida', 'icon tiny'), `${needy[id]} ${needy[id] === 1 ? 'animal necesita' : 'animales necesitan'} algo`) : null,
+        el('div', { class: 'small' }, open ? z.blurb : z.unlockHint)),
       action,
     ));
   }

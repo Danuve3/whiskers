@@ -15,7 +15,7 @@ import type { MetaHost } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
 
 // ---------------------------------------------------------------- Retratos
-function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
+export function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
   const c = el('canvas', { width: w, height: h, class: 'pt' });
   const x = c.getContext('2d')!;
   const look = makeLook(a.breed, a.variant, a.seed, a.rare);

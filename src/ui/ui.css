@@ -215,3 +215,23 @@ body:has(.sheet.open) .exit-signs, body:has(.radial) .exit-signs, body:has(.titl
 .zone-row .here { font-size: calc(var(--u) * 6); color: #7a3a3a; }
 .recenter { position: fixed; right: calc(var(--u) * 3); bottom: calc(env(safe-area-inset-bottom) + var(--u) * 60); animation: banner-in 0.35s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 body:has(.sheet.open) .recenter { visibility: hidden; }
+
+/* Pestaña con los animales de la zona */
+.strip { position: fixed; left: 0; top: calc(env(safe-area-inset-top) + var(--u) * 26); display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 2); max-height: calc(100dvh - var(--u) * 90); pointer-events: none; z-index: 4; }
+.strip > * { pointer-events: auto; }
+.strip-tab { display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 calc(var(--u) * 2); min-height: calc(var(--u) * 14); font-size: calc(var(--u) * 7); cursor: pointer;
+  border-left-width: calc(var(--u) * 2); margin-left: calc(var(--u) * -1); }
+.strip-tab.alert .n::after { content: ''; display: inline-block; width: calc(var(--u) * 3); height: calc(var(--u) * 3); background: #e86a5c; margin-left: calc(var(--u) * 1.5); vertical-align: middle; animation: blink 1.6s ease-in-out infinite; }
+.strip-list { display: none; flex-direction: column; gap: calc(var(--u) * 1.5); overflow-y: auto; overscroll-behavior: contain; padding-left: calc(var(--u) * 1); }
+.strip.open .strip-list { display: flex; animation: banner-in 0.3s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.strip-row { display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 calc(var(--u) * 2) 0 0; border-width: calc(var(--u) * 3); cursor: pointer; text-align: left; font-family: var(--font); }
+.strip-row .pt { width: calc(var(--u) * 24); height: calc(var(--u) * 24); image-rendering: pixelated; }
+.strip-row .need { margin-left: calc(var(--u) * 1); animation: blink 1.6s ease-in-out infinite; }
+.strip-row .nm { font-size: calc(var(--u) * 6); color: #5e3f36; max-width: calc(var(--u) * 40); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-row .mini-bars { display: flex; flex-direction: column; gap: calc(var(--u) * 0.5); width: calc(var(--u) * 30); margin-top: calc(var(--u) * 1); }
+.strip-row .mini-bars .bar { height: calc(var(--u) * 2); border-width: calc(var(--u) * 0.5); }
+body:has(.sheet.open) .strip, body:has(.title-screen) .strip, body:has(.laserbar:not([style*="none"])) .strip { visibility: hidden; }
+/* mapa: avisos */
+.zone-row .needy { display: flex; align-items: center; gap: calc(var(--u) * 1.5); font-size: calc(var(--u) * 6); color: #c4626e; }
+.mapbtn.alert .btn::after { content: ''; position: absolute; right: calc(var(--u) * 1); top: calc(var(--u) * 1); width: calc(var(--u) * 4); height: calc(var(--u) * 4); background: #e86a5c; box-shadow: 0 0 0 calc(var(--u) * 1) #fff4dc; animation: blink 1.6s ease-in-out infinite; }
+.mapbtn .btn { position: relative; }

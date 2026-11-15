@@ -20,6 +20,11 @@ export interface MetaState {
   zonesOpen?: string[];
   /** zona en la que estaba el jugador */
   zone?: string;
+  /** pistas contextuales ya mostradas y zonas ya visitadas */
+  hints?: string[];
+  visited?: string[];
+  /** cosas que se han usado alguna vez (mapa, armario…) para las pistas */
+  used?: string[];
 }
 
 export function newMeta(): MetaState {

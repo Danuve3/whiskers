@@ -20,6 +20,7 @@ import { Tutorial } from './ui/tutorial.ts';
 import { applyOffline } from './sim/offline.ts';
 import { iconImg } from './ui/kit.ts';
 import { ExitSigns, RecenterButton, openMap } from './ui/nav.ts';
+import { AnimalStrip, startHints, markUsed, needyByZone } from './ui/assist.ts';
 import { Hud, achievementBanner, openAlbum, openAchievements, openMissions, openNeighbor, DECOR_NAMES } from './ui/metaUI.ts';
 
 const params = new URLSearchParams(location.search);
@@ -166,6 +167,8 @@ game.events = {
   },
   zoneChanged: (z) => {
     W.meta.zone = z;
+    W.meta.visited ??= [];
+    if (!W.meta.visited.includes(z)) W.meta.visited.push(z);
     if (z === 'plaza') tuto?.event('plaza');
     toast(`${ZONES[z].title} · ${ZONES[z].blurb}`, 3600);
     check();
@@ -296,7 +299,10 @@ void (async () => {
       },
       logros: () => openAchievements(host),
       misiones: () => openMissions(host),
-      armario: () => wardrobe('Armario'),
+      armario: () => {
+        markUsed(W.meta, 'armario');
+        wardrobe('Armario');
+      },
       decoracion: decorSheet,
       ajustes: () => openSettings(save, () => audio.setVolumes(save.settings), (d) => {
         store(d);
@@ -312,7 +318,21 @@ void (async () => {
     // navegación: carteles sobre las salidas y mapa del barrio
     new ExitSigns(game);
     new RecenterButton(game);
-    document.getElementById('ui')!.append(el('div', { class: 'mapbtn' }, button(iconImg('mapa'), () => openMap(game))));
+    const mapBtn = el('div', { class: 'mapbtn' }, button(iconImg('mapa'), () => {
+      markUsed(W.meta, 'mapa');
+      openMap(game);
+    }));
+    document.getElementById('ui')!.append(mapBtn);
+    // puntito en el mapa si en otra zona abierta alguien necesita algo
+    setInterval(() => {
+      const nz = needyByZone(W.animals);
+      const other = (Object.keys(nz) as ZoneId[]).some((z) => z !== game.zoneId && zoneOpen(z, W.stats, W.animals));
+      mapBtn.classList.toggle('alert', other);
+    }, 2000);
+    new AnimalStrip(game, (en) => game.events.animalTap(en, innerWidth / 2, innerHeight / 2), () => markUsed(W.meta, 'lista'));
+    W.meta.visited ??= [];
+    if (!W.meta.visited.includes(game.zoneId)) W.meta.visited.push(game.zoneId);
+    startHints(game, W.meta, W.stats as Record<string, number>, () => !!tuto && !tuto.done);
     if (!save.characterDone || params.has('editor')) wardrobe('¿Quién eres?');
     else {
       pendingWelcome?.();
