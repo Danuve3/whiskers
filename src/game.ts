@@ -28,7 +28,8 @@ import type { Outfit } from './sprites/player.ts';
 import { Population, bowlDistance, type Entry } from './world/population.ts';
 import { isFeeder, SERVINGS } from './sim/feeders.ts';
 import type { MomentId } from './sim/life.ts';
-import { generateAnimal, comfortDistance, species, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
+import { pickTreasure, VISITORS, visitorData, type TreasureDef, type WorldNow } from './sim/collect.ts';
+import { generateAnimal, comfortDistance, species, hearts, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
 export interface WorldState {
   animals: AnimalData[];
@@ -74,6 +75,8 @@ export interface GameEvents {
   friends?(a: Entry, b: Entry): void;
   moment?(id: MomentId, e: Entry): void;
   routine?(e: Entry, text: string): void;
+  treasure?(def: TreasureDef): void;
+  visitor?(e: Entry, first: boolean): void;
 }
 
 interface StaticObj extends Drawable {
@@ -356,7 +359,12 @@ export class Game {
       moment: (id, e) => this.pendingMoments.push({ id, e, t: 6 }),
     });
     this.pop.setSpots(this.namedSpots());
+    this.treasures = [];
+    this.pickup = null;
+    this.treasureT = 60 + Math.random() * 120;
     this.populate();
+    this.updateVisitors();
+    if (Math.random() < 0.7) setTimeout(() => this.spawnTreasure(), 4000);
     // vecinos
     for (const n of this.zoneDef.npcs) {
       const nb = NEIGHBORS.find((x) => x.id === n.id);
@@ -527,6 +535,64 @@ export class Game {
     this.cam.follow = true;
   }
 
+  /** tesoros escondidos en el suelo de esta zona */
+  treasures: { def: TreasureDef; tx: number; ty: number; x: number; y: number; z: number }[] = [];
+  private treasureT = 120;
+  /** tesoro que se va a recoger al llegar a su lado */
+  private pickup: { tx: number; ty: number } | null = null;
+
+  /** Cómo está el mundo ahora (para tesoros y visitantes). */
+  worldNow(): WorldNow {
+    return { season: this.season, rain: this.weather.rain, snow: Math.max(this.snowCover, this.weather.snow), hour: this.hour, events: this.fiestas, open: this.world.meta?.zonesOpen ?? ['calle'] };
+  }
+
+  /** Esconde un tesoro en algún rincón (a veces un animal amigo te lleva hasta él). */
+  spawnTreasure(): void {
+    if (this.treasures.length >= 2 || this.opts.shot) return;
+    const have = this.world.meta?.treasures ?? {};
+    const def = pickTreasure(this.zoneId, this.worldNow(), have, Math.random);
+    if (!def) return;
+    const G = this.grid, pm = this.player.m;
+    for (let k = 0; k < 40; k++) {
+      const tx = 3 + Math.floor(Math.random() * (G.w - 3)), ty = 3 + Math.floor(Math.random() * (G.h - 3));
+      if (!walkable(G, tx, ty) || Math.hypot(tx - pm.tx, ty - pm.ty) < 4 || this.treasures.some((t) => t.tx === tx && t.ty === ty)) continue;
+      const x = tx * TILE + 4 + Math.random() * 8, y = ty * TILE + 4 + Math.random() * 8;
+      this.treasures.push({ def, tx, ty, x, y, z: G.height[ty * G.w + tx] });
+      const guide = this.pop.entries.find((e) => hearts(e.data) >= 3 && e.brain.mode !== 'eat' && e.brain.mode !== 'sleep' && !e.ent.m.moving);
+      if (guide && Math.random() < 0.45) this.pop.pointAt(guide, tx, ty);
+      return;
+    }
+  }
+
+  /** Llegan o se van los visitantes de temporada de esta zona según el tiempo y la estación. */
+  updateVisitors(): void {
+    if (this.opts.shot) return;
+    const w = this.worldNow();
+    for (const v of VISITORS) {
+      const id = `v-${v.id}`;
+      const here = v.when(w) && w.open.includes(v.zone);
+      let D = this.world.animals.find((a) => a.id === id);
+      if (!here) {
+        if (D && D.zone !== 'visitante') D.zone = 'visitante';
+        if (v.zone === this.zoneId && this.pop.entries.some((e) => e.data.id === id)) this.removeAnimal(id);
+        continue;
+      }
+      const first = !D;
+      if (!D) {
+        D = visitorData(v, Date.now());
+        this.world.animals.push(D);
+      }
+      D.zone = v.zone;
+      if (v.zone !== this.zoneId) continue;
+      let e = this.pop.entries.find((x) => x.data.id === id);
+      if (!e) {
+        e = this.pop.add(D, this.zoneDef.entry[0], this.zoneDef.entry[1]);
+        this.events.visitor?.(e, first);
+      }
+      e.ent.acc = v.hat;
+    }
+  }
+
   /** momentos raros recién empezados: cuentan si los ves (en pantalla y cerca) en unos segundos */
   private pendingMoments: { id: MomentId; e: Entry; t: number }[] = [];
   /** tiempo mirando a un animal que hace su costumbre (para descubrirla) */
@@ -692,6 +758,20 @@ export class Game {
         return;
       }
     }
+    // tesoros: ir a recogerlos
+    for (const T of this.treasures) {
+      const sx = 2 * (T.x - T.y), sy = T.x + T.y - T.z;
+      if (Math.abs(wx - sx) < 9 && wy > sy - 12 && wy < sy + 5) {
+        this.pending = null;
+        this.refill = null;
+        this.pickup = { tx: T.tx, ty: T.ty };
+        if (this.walkTo(T.tx, T.ty)) {
+          this.cam.follow = true;
+          this.marker = { x: T.x, y: T.y, t: 0.8 };
+        } else this.pickup = null;
+        return;
+      }
+    }
     // comederos y bebederos: ir a rellenarlos
     for (const d of this.decor) {
       if (!isFeeder(d.id)) continue;
@@ -785,6 +865,23 @@ export class Game {
     });
     this.handlePending(dt);
     this.updateStepBack(dt);
+    this.treasureT -= dt;
+    if (this.treasureT <= 0) {
+      this.treasureT = 150 + Math.random() * 120;
+      this.spawnTreasure();
+    }
+    if (this.pickup && !this.player.m.moving) {
+      const P = this.pickup, pm = this.player.m;
+      this.pickup = null;
+      const i = this.treasures.findIndex((t) => t.tx === P.tx && t.ty === P.ty);
+      if (i >= 0 && Math.hypot(pm.x - this.treasures[i].x, pm.y - this.treasures[i].y) / TILE < 1.6) {
+        const T = this.treasures.splice(i, 1)[0];
+        this.player.action = 'crouch';
+        this.player.actionT = 1.1;
+        this.pop.endPoint(T.tx, T.ty);
+        this.events.treasure?.(T.def);
+      }
+    }
     if (this.refill && !this.player.m.moving) {
       const R = this.refill, pm = this.player.m;
       this.refill = null;
@@ -1065,6 +1162,28 @@ export class Game {
       const [x, y, w, h] = o.rect!;
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
+    }
+    // tesoros escondidos: brillan de vez en cuando
+    for (const T of this.treasures) {
+      const img = matrix('tr-' + T.def.id, T.def.rows, { '.': null, ...T.def.key });
+      const tsx = 2 * (T.x - T.y), tsy = T.x + T.y - T.z;
+      list.push({
+        box: [T.x - 3, T.y - 3, T.z, T.x + 3, T.y + 3, T.z + 2], rect: [tsx - 6, tsy - 10, 12, 12],
+        draw: (ctx, cx, cy) => {
+          const X = Math.round(tsx - img.width / 2 - cx), Y = Math.round(tsy - img.height + 1 - cy);
+          ctx.drawImage(img, X, Y);
+          const ph = (performance.now() / 1000 + T.tx * 0.37) % 2.4;
+          if (ph < 0.5) {
+            // destello en cruz
+            const k = ph < 0.25 ? 1 : 2;
+            ctx.fillStyle = PALETTE.cal4;
+            ctx.fillRect(X + img.width, Y - 2, 1, 1);
+            ctx.fillStyle = PALETTE.butter;
+            ctx.fillRect(X + img.width - k, Y - 2, k * 2 + 1, 1);
+            ctx.fillRect(X + img.width, Y - 2 - k, 1, k * 2 + 1);
+          }
+        },
+      });
     }
     // gato en una caja: la caja tiene parte de atrás y de delante para que el gato quede dentro
     const BX = this.pop.box;

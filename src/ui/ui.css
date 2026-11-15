@@ -253,3 +253,12 @@ body:has(.sheet.open) .strip, body:has(.title-screen) .strip, body:has(.laserbar
 .letter .txt { font-size: calc(var(--u) * 7); line-height: 1.35; }
 .adopt .talk .big { width: calc(var(--u) * 40); height: calc(var(--u) * 40); image-rendering: pixelated; flex: 0 0 auto; }
 .adopt .footer, .trick .footer { gap: calc(var(--u) * 3); flex-wrap: wrap; }
+/* Colecciones */
+.set { grid-column: 1 / -1; padding: calc(var(--u) * 2) calc(var(--u) * 3); margin-bottom: calc(var(--u) * 2); }
+.set .nm { font-size: calc(var(--u) * 7.5); color: #5e3f36; }
+.set.done .nm { color: #7a3a3a; }
+.set .items { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 2); }
+.set .item { display: flex; flex-direction: column; align-items: center; width: calc(var(--u) * 34); text-align: center; }
+.set .item .gift { width: calc(var(--u) * 14); height: calc(var(--u) * 14); image-rendering: pixelated; object-fit: contain; }
+.set .item .small { font-size: calc(var(--u) * 5); line-height: 1.15; }
+.set .item.unknown .small { color: #9c8a8f; }

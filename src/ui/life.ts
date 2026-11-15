@@ -6,12 +6,20 @@ import { getFrames, type Look } from '../sprites/animals.ts';
 import { species, type AnimalData } from '../sim/model.ts';
 import { bestFriend, stageName, MOMENTS, TRICKS, type Routine, type MomentId } from '../sim/life.ts';
 import type { MetaState } from '../meta/controller.ts';
+import { SETS, TREASURES, VISITORS, setProgress } from '../sim/collect.ts';
+import { rewardText } from '../sim/progress.ts';
+import { dataURL } from './art.ts';
+import type { ColorName } from '../gfx/palette.ts';
 import { PALETTE } from '../gfx/palette.ts';
 import * as sfx from '../audio/sfx.ts';
 
 /** Lo que sabes de su vida (para la ficha). */
 export function lifeLines(D: AnimalData, all: AnimalData[], routine: Routine | null, now: number, neighborName: (id: string) => string): string[] {
   const out: string[] = [];
+  if (D.visitor) {
+    const v = VISITORS.find((x) => x.id === D.visitor);
+    if (v) out.push(`Visitante de temporada: ${v.whenText}.`);
+  }
   if (D.adoptedBy) out.push(`Vive con ${neighborName(D.adoptedBy)} desde el ${new Date(D.adoptedAt ?? now).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.`);
   const st = stageName(D, now);
   if (st) out.push(`Es un ${st}: crece día a día.`);
@@ -47,7 +55,29 @@ export function openAdoption(D: AnimalData, adopter: string, onAnswer: (yes: boo
   sheet.open();
 }
 
-// ---------------------------------------------------------------- Álbum: momentos y cartas
+// ---------------------------------------------------------------- Álbum: colecciones, momentos y cartas
+export function collectionsGrid(grid: HTMLElement, meta: MetaState): string {
+  const have = meta.treasures ?? {};
+  let done = 0;
+  for (const S of SETS) {
+    const [n, tot] = setProgress(S.id, have);
+    const complete = (meta.setsDone ?? []).includes(S.id);
+    if (complete) done++;
+    const items = el('div', { class: 'items' }, ...TREASURES.filter((t) => t.set === S.id).map((t) => {
+      const got = !!have[t.id];
+      const key: Record<string, ColorName | null> = { '.': null };
+      for (const [k, c] of Object.entries(t.key)) key[k] = got ? c : 'cal1';
+      const img = el('img', { src: dataURL('tr-' + t.id + (got ? '' : '-x'), t.rows, key), class: 'gift', title: got ? t.name : '???' });
+      return el('div', { class: `item ${got ? '' : 'unknown'}` }, img, el('div', { class: 'small' }, got ? t.name : '???'));
+    }));
+    grid.append(el('div', { class: `set panel ${complete ? 'done' : ''}` },
+      el('div', { class: 'nm' }, `${S.name} · ${n}/${tot}`),
+      el('div', { class: 'small' }, complete ? `¡Completa! Premio: ${rewardText(S.reward)}` : `${S.text} Premio: ${rewardText(S.reward)}`),
+      items));
+  }
+  return `Colecciones: ${done} de ${SETS.length} completas`;
+}
+
 export function momentsGrid(grid: HTMLElement, meta: MetaState): string {
   const got = meta.moments ?? {};
   for (const [id, m] of Object.entries(MOMENTS) as [MomentId, (typeof MOMENTS)[MomentId]][]) {

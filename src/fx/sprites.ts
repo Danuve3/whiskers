@@ -194,3 +194,16 @@ export function cardboardBox(part: 'back' | 'front'): HTMLCanvasElement {
   boxCache[part] = c;
   return c;
 }
+
+// Gorritos de los visitantes de temporada (se colocan sobre la coronilla del animal)
+const HATS: Record<string, { rows: string[]; key: Key }> = {
+  lluvia: { rows: ['....kkkkk....', '...kyyyyyk...', '..kyYyyyyyk..', '.kyyyyyyyyyk.', 'kyyyyyyyyyyyk', '.kkkkkkkkkkk.'], key: { '.': null, k: 'wood1', y: 'mustard', Y: 'butter' } },
+  marinero: { rows: ['...kkkkk...', '..kwwwwwk..', '.kwwwswwwk.', '.kwwwwwwwk.', 'kSSSSSSSSSk', '.kkkkkkkkk.'], key: { '.': null, k: 'ink2', w: 'cal4', s: 'coral', S: 'water1' } },
+  lana: { rows: ['....ww....', '...kwwk...', '..krrrrk..', '.krRrRrrk.', 'krrRrrRrrk', 'kwwwwwwwwk', '.kkkkkkkk.'], key: { '.': null, k: 'tile0', r: 'coral', R: 'tile1', w: 'cal4' } },
+  flores: { rows: ['.p.y.l.p.y.', 'pPgYgLgPgYp', '.ggggggggg.'], key: { '.': null, p: 'pink', P: 'rose', y: 'butter', Y: 'mustard', l: 'lilac', L: 'plum', g: 'veg2' } },
+  boina: { rows: ['.....k.....', '..kkkkkkk..', '.kbBbbbbbbk', 'kbBbbbbbbbk', '.kkkkkkkkk.'], key: { '.': null, k: 'ink2', b: 'tile1', B: 'tile2' } },
+};
+export function hatSprite(id: string): HTMLCanvasElement | null {
+  const h = HATS[id];
+  return h ? matrix('hat-' + id, h.rows, h.key) : null;
+}

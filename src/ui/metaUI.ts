@@ -13,7 +13,7 @@ import { SKY_NAMES, type Sky } from '../sim/weather.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { MetaHost } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
-import { momentsGrid, lettersList } from './life.ts';
+import { momentsGrid, lettersList, collectionsGrid } from './life.ts';
 
 // ---------------------------------------------------------------- Retratos
 export function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
@@ -117,7 +117,7 @@ function next(): void {
 }
 
 // ---------------------------------------------------------------- Álbum
-type AlbumTab = 'Razas' | 'Animales' | 'Vitrina' | 'Momentos' | 'Cartas';
+type AlbumTab = 'Razas' | 'Animales' | 'Vitrina' | 'Colecciones' | 'Momentos' | 'Cartas';
 export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: AlbumTab = 'Animales'): void {
   const sheet = new Sheet('Álbum', 'album');
   const tabs = el('div', { class: 'tabs' });
@@ -126,7 +126,7 @@ export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: A
   sheet.body.append(tabs, count, grid);
   const render = () => {
     const unread = (h.meta.letters ?? []).filter((L) => !L.read).length;
-    tabs.replaceChildren(...(['Animales', 'Razas', 'Vitrina', 'Momentos', 'Cartas'] as const).map((t) => button(t === 'Cartas' && unread ? `Cartas (${unread})` : t, () => {
+    tabs.replaceChildren(...(['Animales', 'Razas', 'Vitrina', 'Colecciones', 'Momentos', 'Cartas'] as const).map((t) => button(t === 'Cartas' && unread ? `Cartas (${unread})` : t, () => {
       tab = t;
       render();
     }, t === tab ? 'on' : '')));
@@ -148,6 +148,8 @@ export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: A
         } }, portrait(a, false), el('div', { class: 'nm' }, a.name), a.adoptedBy ? el('div', { class: 'small' }, 'adoptado') : heartsRow(hearts(a)));
         grid.append(card);
       }
+    } else if (tab === 'Colecciones') {
+      count.textContent = collectionsGrid(grid, h.meta);
     } else if (tab === 'Momentos') {
       count.textContent = momentsGrid(grid, h.meta);
     } else if (tab === 'Cartas') {

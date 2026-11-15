@@ -29,6 +29,9 @@ export interface MetaState {
   lastLitter?: number;
   litterDay?: number;
   lastOffer?: number;
+  /** tesoros encontrados (id → veces) y colecciones completadas */
+  treasures?: Record<string, number>;
+  setsDone?: string[];
   /** casilla del jugador al guardar (se vuelve ahí al abrir el juego) */
   pos?: [number, number];
   /** cosas que se han usado alguna vez (mapa, armario…) para las pistas */

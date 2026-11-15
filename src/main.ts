@@ -17,6 +17,7 @@ import { rewardText, NEIGHBORS } from './sim/progress.ts';
 import { lifeLines, openTrickGame, openAdoption } from './ui/life.ts';
 import { REQUEST_ACTION, REQUEST_BONUS, MOMENTS, nextTrick, pickMother, makeLitter, adoptionCandidate, letterText, ADOPTERS } from './sim/life.ts';
 import { makeLook } from './sprites/breeds.ts';
+import { SETS, setProgress, VISITORS } from './sim/collect.ts';
 import type { Entry } from './world/population.ts';
 import { ZONES, zoneOpen, type ZoneId } from './world/zones.ts';
 import { openWelcome, openFishing } from './ui/extras.ts';
@@ -120,6 +121,7 @@ function card(a: (typeof W.animals)[number]) {
 const nbName = (id: string) => NEIGHBORS.find((n) => n.id === id)?.name ?? 'un vecino';
 function lifeTick(): void {
   const now = Date.now();
+  game.updateVisitors();
   const busy = !!document.querySelector('.sheet.open, .title-screen') || (!!tuto && !tuto.done);
   const open = (W.meta.zonesOpen ?? ['calle']) as ZoneId[];
   const living = W.animals.filter((a) => !a.adoptedBy && open.includes(a.zone as ZoneId));
@@ -241,6 +243,31 @@ game.events = {
       haptic([8, 40, 8]);
       sfx.gift();
     }
+    check();
+  },
+  treasure: (def) => {
+    const H = (W.meta.treasures ??= {});
+    H[def.id] = (H[def.id] ?? 0) + 1;
+    bump(host, 'tesoros');
+    const set = SETS.find((s) => s.id === def.set)!;
+    const [n, tot] = setProgress(def.set, H);
+    sfx.gift();
+    haptic(10);
+    toast(`Has encontrado: ${def.name}. ${set.name}: ${n} de ${tot}.`);
+    W.meta.setsDone ??= [];
+    if (n === tot && !W.meta.setsDone.includes(set.id)) {
+      W.meta.setsDone.push(set.id);
+      giveReward(host, set.reward);
+      bump(host, 'colecciones');
+      toast(`¡Colección completa: ${set.name}! Premio: ${rewardText(set.reward)}.`, 5000);
+      haptic([16, 60, 16]);
+    }
+    check();
+  },
+  visitor: (e, first) => {
+    const v = VISITORS.find((x) => x.id === e.data.visitor);
+    toast(first ? `Ha llegado ${e.data.name}, un visitante de temporada: ${v?.whenText ?? ''}.` : `${e.data.name} ha vuelto de visita.`, 4200);
+    if (first) bump(host, 'visitantes');
     check();
   },
   routine: (e, text) => {

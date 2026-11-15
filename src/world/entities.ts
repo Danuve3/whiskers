@@ -3,6 +3,7 @@ import { TILE, type Box } from '../engine/iso.ts';
 import { getFrames, type Clip, type Frame, type Look } from '../sprites/animals.ts';
 import { getPlayerFrames, type Outfit, type PFrame, type PlayerClip } from '../sprites/player.ts';
 import { warmPlayer } from '../sprites/workerClient.ts';
+import { hatSprite } from '../fx/sprites.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { Grid } from './path.ts';
 import { santaHat } from '../fx/events.ts';
@@ -224,6 +225,8 @@ export class Animal implements Drawable {
   inPlace = false;
   /** se dibuja más abajo (dentro de una caja) */
   sink = 0;
+  /** gorrito de visitante de temporada */
+  acc: string | null = null;
   /** gorrito de Navidad */
   hat = false;
 
@@ -335,6 +338,11 @@ export class Animal implements Drawable {
     if (this.hat && f.top) {
       const h = santaHat();
       ctx.drawImage(h, X + f.top[0] - 3, Y + f.top[1] - 4);
+    }
+    // gorrito de visitante de temporada
+    if (this.acc && f.top) {
+      const h = hatSprite(this.acc);
+      if (h) ctx.drawImage(h, X + f.top[0] - Math.floor(h.width / 2), Y + f.top[1] - h.height + 2);
     }
     this.rect = [X + camX, Y + camY, f.canvas.width, f.canvas.height];
   }

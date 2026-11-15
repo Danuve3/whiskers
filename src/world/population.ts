@@ -15,7 +15,7 @@ import type { Season } from '../sim/calendar.ts';
 import * as sfx from '../audio/sfx.ts';
 
 export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care' | 'feeder'
-  | 'social' | 'routine' | 'ask' | 'spin' | 'box' | 'trick' | 'pounce';
+  | 'social' | 'routine' | 'ask' | 'spin' | 'box' | 'trick' | 'pounce' | 'point';
 
 export interface Brain {
   feederId?: string;
@@ -35,6 +35,8 @@ export interface Brain {
   /** ya ha adoptado la postura del modo actual */
   posed?: boolean;
   spinStep?: number;
+  /** casilla de un tesoro que te está enseñando */
+  point?: [number, number];
   /** al comer, se acerca hasta tener la boca sobre la comida */
   slide?: [number, number];
 }
@@ -198,6 +200,24 @@ export class Population {
     const rt = this.routineOf(e.data);
     return !!rt && e.brain.mode === 'routine' && !e.ent.m.moving && tdist(e.ent.m.x, e.ent.m.y, rt.tile[0] * TILE + 8, rt.tile[1] * TILE + 8) < 1.6;
   }
+  /** Un animal amigo te lleva hasta un tesoro y se sienta a su lado. */
+  pointAt(e: Entry, tx: number, ty: number): void {
+    e.brain.mode = 'point';
+    e.brain.point = [tx, ty];
+    e.brain.t = 50;
+    e.brain.posed = false;
+    this.go(e, tx + 0.6, ty + 0.6, this.speeds(e).trot);
+  }
+  /** Ya has recogido el tesoro: deja de señalarlo. */
+  endPoint(tx: number, ty: number): void {
+    for (const e of this.entries)
+      if (e.brain.mode === 'point' && e.brain.point?.[0] === tx && e.brain.point?.[1] === ty) {
+        e.brain.mode = 'idle';
+        e.brain.think = 1;
+        e.ent.react('heart', 1.6);
+      }
+  }
+
   /** Petición atendida (o caducada). */
   clearRequest(): void {
     const r = this.request;
@@ -403,6 +423,26 @@ export class Population {
       case 'trick':
         if (B.t <= 0) end(2);
         return true;
+      case 'point': {
+        if (B.t <= 0 || !B.point) {
+          end(2);
+          return true;
+        }
+        if (A.m.moving) return true;
+        if (!B.posed) {
+          B.posed = true;
+          this.faceTo(e, B.point[0] * TILE + 8, B.point[1] * TILE + 8);
+          A.play('sit');
+        }
+        if (B.think <= 0) {
+          // de vez en cuando te mira y vuelve a mirar el tesoro
+          B.think = 3 + Math.random() * 2;
+          A.react('alert', 1.1);
+          if (species(D) === 'dog' && Math.random() < 0.5) sfx.bark(A.look.shape.legH, 1);
+          else if (Math.random() < 0.5) sfx.meow(A.look.shape.legH);
+        }
+        return true;
+      }
       case 'box':
         if (B.t <= 0 || pd < 1.2) {
           if (this.box?.e === e) this.box = null;
