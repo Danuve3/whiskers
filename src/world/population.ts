@@ -7,6 +7,7 @@ import { warmAnimal } from '../sprites/workerClient.ts';
 import { serve, SERVINGS, type PlacedFeeder } from '../sim/feeders.ts';
 import { apply, comfortDistance, hearts, species, stage, type Action, type ActionResult, type AnimalData, type FoodId } from '../sim/model.ts';
 import { matrix } from '../fx/sprites.ts';
+import { PALETTE } from '../gfx/palette.ts';
 import { bond, affinity, FRIENDS, routineFor, inRoutine, pickRequest, type Routine, type AnimalRequest, type MomentId } from '../sim/life.ts';
 import { growth } from '../sim/life.ts';
 import { scaleShape } from '../sprites/breeds.ts';
@@ -34,6 +35,8 @@ export interface Brain {
   /** ya ha adoptado la postura del modo actual */
   posed?: boolean;
   spinStep?: number;
+  /** al comer, se acerca hasta tener la boca sobre la comida */
+  slide?: [number, number];
 }
 
 export interface Entry {
@@ -42,31 +45,93 @@ export interface Entry {
   brain: Brain;
 }
 
-const BOWL_ROWS = ['..kkkkkk..', '.kfffffFk.', 'kRRRRRRRRk', 'krRRRRRRrk', '.kkkkkkkk.'];
 /** A qué distancia (tiles) tiene que estar el jugador del cuenco para que este animal se acerque. */
 export function bowlDistance(D: AnimalData): number {
   return [5, 4, 2.6, 0, 0][Math.min(4, hearts(D))] * (D.personality === 'timido' ? 1.15 : 1) * (D.personality === 'gloton' ? 0.75 : 1);
 }
+
+// Comida y agua en el suelo: el mismo icono que en los menús (pescado para los gatos, muslo para los
+// perros, gota para el agua) y se va gastando mientras el animal come o bebe.
+const FLOOR_FISH = ['....kkkkk.....', '..kkSSSSSk..kk', '.kwSSSSSSSkkSk', 'kkmmmmnnmmSSk.', '.kmmmmmmmmkmmk', '..kkwwwwwk..kk', '....kkkkk.....'];
+const FLOOR_MEAT = ['..kkkk.......', '.kYYook......', 'kYoooook.....', 'kooooooOk....', '.kOooOOOk....', '..kOOOOkwk...', '...kkkk.kwkk.', '........kwwck', '.........kkk.'];
+const FLOOR_DROP = ['...k...', '..ksk..', '..ksk..', '.kssSk.', 'kswssSk', 'kswsSSk', 'kssSSSk', '.kSSSk.', '..kkk..'];
+const FLOOR_KEY = { '.': null, k: 'ink2', w: 'cal4', c: 'cal3', s: 'sky', S: 'water2', m: 'stone3', n: 'stone2', o: 'tile3', O: 'tile2', Y: 'butter' } as const;
 
 export class Bowl implements Drawable {
   box: Box;
   rect: [number, number, number, number];
   state: 'full' | 'eating' | 'empty' = 'full';
   fade = 1;
-  constructor(public x: number, public y: number, public z: number, public kind: 'food' | 'water', public food: FoodId, public forId: string) {
-    this.box = [x - 4, y - 4, z, x + 4, y + 4, z + 4];
+  /** 0 = intacto … 1 = se lo ha terminado */
+  progress = 0;
+  /** duración de la comida (s), para calcular el progreso */
+  dur = 3;
+  /** de qué lado come el animal (los bocados empiezan por ahí) */
+  fromLeft = true;
+  private crumbs: { x: number; y: number; vx: number; vy: number; t: number }[] = [];
+  private crumbT = 0;
+  constructor(public x: number, public y: number, public z: number, public kind: 'food' | 'water', public food: FoodId, public forId: string, public cat = true) {
+    this.box = [x - 5, y - 5, z, x + 5, y + 5, z + 4];
     const sx = 2 * (x - y), sy = x + y - z;
-    this.rect = [sx - 5, sy - 5, 10, 6];
+    this.rect = [sx - 8, sy - 9, 16, 11];
+  }
+  private sprite(): HTMLCanvasElement {
+    const rows = this.kind === 'water' ? FLOOR_DROP : this.cat ? FLOOR_FISH : FLOOR_MEAT;
+    return matrix(`floor-${this.kind}-${this.cat}`, rows, FLOOR_KEY);
+  }
+  /** Avanza el consumo y las migas (o gotitas). */
+  tick(dt: number): void {
+    if (this.state === 'eating') {
+      this.crumbT -= dt;
+      if (this.crumbT <= 0) {
+        this.crumbT = 0.22 + Math.random() * 0.2;
+        this.crumbs.push({ x: (Math.random() - 0.5) * 8, y: -3, vx: (Math.random() - 0.5) * 14, vy: -18 - Math.random() * 10, t: 0.6 });
+      }
+    }
+    for (const c of this.crumbs) {
+      c.t -= dt;
+      c.vy += 60 * dt;
+      c.x += c.vx * dt;
+      c.y = Math.min(1, c.y + c.vy * dt);
+    }
+    this.crumbs = this.crumbs.filter((c) => c.t > 0);
   }
   draw(ctx: CanvasRenderingContext2D, camX: number, camY: number): void {
     const sx = Math.round(2 * (this.x - this.y) - camX), sy = Math.round(this.x + this.y - this.z - camY);
-    const full = this.state !== 'empty';
-    const key = this.kind === 'food'
-      ? { '.': null, k: 'ink2' as const, R: 'coral' as const, r: 'rose' as const, f: full ? ('wood3' as const) : ('cal1' as const), F: full ? ('wood2' as const) : ('cal1' as const) }
-      : { '.': null, k: 'ink2' as const, R: 'sky' as const, r: 'water2' as const, f: full ? ('water4' as const) : ('cal1' as const), F: full ? ('water3' as const) : ('cal1' as const) };
-    const img = matrix(`bowl-${this.kind}-${full}`, BOWL_ROWS, key);
+    const img = this.sprite();
+    const W = img.width, H = img.height;
+    const p = this.state === 'empty' ? 1 : this.progress;
     ctx.globalAlpha = this.fade;
-    ctx.drawImage(img, sx - 5, sy - 4);
+    // sombrita en el suelo
+    ctx.fillStyle = PALETTE.stone1;
+    ctx.globalAlpha = this.fade * 0.35 * (1 - p * 0.7);
+    ctx.fillRect(sx - Math.round(W / 2) + 1, sy, W - 2, 1);
+    ctx.globalAlpha = this.fade;
+    const X = sx - Math.floor(W / 2), Y = sy - H + 1;
+    if (p < 1) {
+      if (this.kind === 'water') {
+        // el agua baja de nivel: desaparecen las filas de arriba
+        const cut = Math.floor(H * p);
+        ctx.drawImage(img, 0, cut, W, H - cut, X, Y + cut, W, H - cut);
+        if (cut > 0 && cut < H - 1) {
+          ctx.fillStyle = PALETTE.water4;
+          ctx.fillRect(X + 2, Y + cut, W - 4, 1);
+        }
+      } else {
+        // bocados: se come desde su lado, con el borde mordisqueado
+        const keep = Math.ceil(W * (1 - p));
+        const sx0 = this.fromLeft ? W - keep : 0;
+        ctx.drawImage(img, sx0, 0, keep, H, X + sx0, Y, keep, H);
+        if (p > 0 && keep > 1) {
+          const edge = this.fromLeft ? X + sx0 : X + keep - 1;
+          ctx.fillStyle = PALETTE.ink2;
+          for (let j = 1; j < H - 1; j += 2) ctx.fillRect(edge, Y + j, 1, 1);
+        }
+      }
+    }
+    // migas o gotitas que saltan
+    ctx.fillStyle = this.kind === 'water' ? PALETTE.water3 : this.cat ? PALETTE.stone3 : PALETTE.tile3;
+    for (const c of this.crumbs) ctx.fillRect(Math.round(sx + c.x), Math.round(sy - 2 + c.y), 1, 1);
     ctx.globalAlpha = 1;
   }
 }
@@ -217,7 +282,8 @@ export class Population {
   }
 
   placeBowl(x: number, y: number, z: number, kind: 'food' | 'water', food: FoodId, forId: string): Bowl {
-    const b = new Bowl(x, y, z, kind, food, forId);
+    const who = this.entries.find((q) => q.data.id === forId);
+    const b = new Bowl(x, y, z, kind, food, forId, !who || species(who.data) === 'cat');
     this.bowls.push(b);
     const e = this.entries.find((x) => x.data.id === forId);
     if (e) {
@@ -264,7 +330,9 @@ export class Population {
       } else if (e.brain.mode !== 'feeder') this.feederAnim.delete(e);
     }
     for (const b of this.bowls) {
-      if (b.state === 'empty') b.fade -= dt * 0.35;
+      b.tick(dt);
+      // terminado: ya no queda nada, desaparece enseguida
+      if (b.state === 'empty') b.fade -= dt * 2.5;
     }
     this.bowls = this.bowls.filter((b) => b.fade > 0);
     for (const e of this.entries) {
@@ -463,6 +531,12 @@ export class Population {
 
     // --- comiendo / bebiendo
     if (B.mode === 'eat') {
+      if (B.bowl) B.bowl.progress = Math.max(0, Math.min(1, 1 - B.t / B.bowl.dur));
+      if (B.slide) {
+        const k = Math.min(1, dt * 6);
+        A.m.x += (B.slide[0] - A.m.x) * k;
+        A.m.y += (B.slide[1] - A.m.y) * k;
+      }
       if (B.t <= 0 && B.bowl) {
         const bowl = B.bowl;
         const act: Action = bowl.kind === 'food' ? 'feed' : 'water';
@@ -546,6 +620,15 @@ export class Population {
           this.faceTo(e, B.bowl.x, B.bowl.y);
           B.mode = 'eat';
           B.t = B.bowl.kind === 'food' ? 3.6 : 2.6;
+          B.bowl.dur = B.t;
+          // la boca sobre la comida: el cuerpo queda medio cuerpo por detrás del cuenco
+          {
+            const dx = B.bowl.x - A.m.x, dy = B.bowl.y - A.m.y, l = Math.hypot(dx, dy) || 1;
+            const back = A.look.shape.bodyLen * 0.5 + 2;
+            const tx = B.bowl.x - (dx / l) * back, ty = B.bowl.y - (dy / l) * back;
+            B.slide = walkable(this.grid, Math.floor(tx / TILE), Math.floor(ty / TILE)) ? [tx, ty] : undefined;
+          }
+          B.bowl.fromLeft = A.m.x - A.m.y < B.bowl.x - B.bowl.y;
           B.bowl.state = 'eating';
           A.play(B.bowl.kind === 'food' ? 'eat' : 'drink');
           if (B.bowl.kind === 'water') sfx.lap();
