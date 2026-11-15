@@ -777,6 +777,7 @@ export class Game {
     this.fest.update(dt, this.grade?.night ?? 0);
     // música y ambiente según la hora y el clima
     music.setTarget(moodFor(this.hour, this.weather.rain));
+    music.setZone(this.zoneId);
     const f = this.zone.meta.fountains[0];
     ambience.update(dt, {
       rain: this.weather.rain, wind: this.weather.wind, hour: this.hour, port: !!this.zoneDef.ambient.port,
