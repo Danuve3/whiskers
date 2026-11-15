@@ -19,7 +19,7 @@ import { season as seasonOf, activeEvents, canonicalHour, type Season, type Even
 import { weatherAt, lerpW, skyAt, type Sky } from './sim/weather.ts';
 import { Festivities } from './fx/events.ts';
 import { decorSprite } from './ui/extras.ts';
-import { ZONES, zoneOpen, type ZoneId, type ZoneDef } from './world/zones.ts';
+import { ZONES, zoneOpen, type ZoneId, type ZoneDef, type Exit } from './world/zones.ts';
 import { isFullMoon } from './sim/calendar.ts';
 import { newMeta, type MetaState } from './meta/controller.ts';
 import { NEIGHBORS, GIFTS, type Neighbor } from './sim/progress.ts';
@@ -116,6 +116,49 @@ export class Game {
   /** Animal en el que se centra la cámara mientras su menú está abierto. */
   private focus: { e: Entry; prevFollow: boolean } | null = null;
   bounds: [number, number, number, number] = [0, 0, 0, 0];
+  /** Casilla de la salida a la que mejor se llega desde donde está el jugador (y su altura). */
+  exitTarget(ex: Exit): [number, number, number] | null {
+    const g = this.grid, pm = this.player.m;
+    let best: [number, number, number] | null = null, bestLen = Infinity;
+    for (let y = ex.r[1]; y < ex.r[3]; y++)
+      for (let x = ex.r[0]; x < ex.r[2]; x++) {
+        if (!walkable(g, x, y)) continue;
+        const path = findPath(g, pm.tx, pm.ty, x, y);
+        const len = path ? path.length : Infinity;
+        if (len < bestLen || (!best && !path)) {
+          bestLen = len;
+          best = [x, y, g.height[y * g.w + x]];
+        }
+      }
+    return best;
+  }
+
+  /** Ir andando hasta una salida y cambiar de zona al llegar. */
+  goToExit(ex: Exit): void {
+    const pm = this.player.m;
+    const inside = pm.tx >= ex.r[0] && pm.tx < ex.r[2] && pm.ty >= ex.r[1] && pm.ty < ex.r[3];
+    if (inside) {
+      void this.travel(ex.to, ex.spawn);
+      return;
+    }
+    const t = this.exitTarget(ex);
+    if (!t) return;
+    this.pending = null;
+    if (this.walkTo(t[0], t[1])) {
+      this.cam.follow = true;
+      this.marker = { x: t[0] * TILE + 8, y: t[1] * TILE + 8, t: 0.8 };
+      this.exitIntent = ex;
+    }
+  }
+
+  /** Viaje directo desde el mapa del barrio: se aparece donde se llega andando desde una zona vecina. */
+  travelTo(to: ZoneId): void {
+    if (to === this.zoneId) return;
+    const direct = this.zoneDef.exits.find((e) => e.to === to);
+    const via = direct ?? Object.values(ZONES).flatMap((z) => z.exits).find((e) => e.to === to);
+    if (via) void this.travel(to, via.spawn);
+  }
+
   focusOn(e: Entry | null): void {
     if (e) {
       this.focus = { e, prevFollow: this.focus?.prevFollow ?? this.cam.follow };
@@ -158,6 +201,8 @@ export class Game {
   private exitCooldown = 0;
   /** las salidas solo se activan después de haber andado (al llegar se aparece dentro de la de vuelta) */
   private exitsArmed = false;
+  /** salida elegida en un cartel: se viaja al llegar a ella */
+  private exitIntent: Exit | null = null;
 
   async init(startZone: ZoneId = 'calle', spawn?: [number, number]): Promise<void> {
     const now = new Date();
@@ -295,6 +340,7 @@ export class Game {
     this.cam.follow = true;
     this.exitCooldown = 1.2;
     this.exitsArmed = false;
+    this.exitIntent = null;
   }
 
   /** Dibujables de la decoración colocada en esta zona (y efectos en los animales). */
@@ -561,6 +607,7 @@ export class Game {
       const path = findPath(this.grid, this.player.m.tx, this.player.m.ty, target[0], target[1]);
       if (path) {
         this.player.m.setPath(path);
+        this.exitIntent = null;
         this.cam.follow = true;
         this.marker = { x: target[0] * TILE + 8, y: target[1] * TILE + 8, t: 0.8 };
       }
@@ -641,6 +688,16 @@ export class Game {
         e.data.trust = Math.min(5, e.data.trust + 0.08);
         this.events.laserDone?.(e);
         this.laser = null;
+      }
+    }
+    // salida elegida en un cartel: viajar al llegar (o olvidarla si el camino se interrumpe)
+    if (this.exitIntent && !this.player.m.moving) {
+      const ex = this.exitIntent, pm = this.player.m;
+      this.exitIntent = null;
+      if (pm.tx >= ex.r[0] && pm.tx < ex.r[2] && pm.ty >= ex.r[1] && pm.ty < ex.r[3]) {
+        this.exitCooldown = 3;
+        this.exitsArmed = false;
+        void this.travel(ex.to, ex.spawn);
       }
     }
     // salidas a otras zonas por la calle baja

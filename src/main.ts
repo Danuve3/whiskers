@@ -19,6 +19,7 @@ import { showTitle } from './ui/title.ts';
 import { Tutorial } from './ui/tutorial.ts';
 import { applyOffline } from './sim/offline.ts';
 import { iconImg } from './ui/kit.ts';
+import { ExitSigns, openMap } from './ui/nav.ts';
 import { Hud, achievementBanner, openAlbum, openAchievements, openMissions, openNeighbor, DECOR_NAMES } from './ui/metaUI.ts';
 
 const params = new URLSearchParams(location.search);
@@ -307,6 +308,9 @@ void (async () => {
     };
     tickHud();
     setInterval(tickHud, 10000);
+    // navegación: carteles sobre las salidas y mapa del barrio
+    new ExitSigns(game);
+    document.getElementById('ui')!.append(el('div', { class: 'mapbtn' }, button(iconImg('mapa'), () => openMap(game))));
     if (!save.characterDone || params.has('editor')) wardrobe('¿Quién eres?');
     else {
       pendingWelcome?.();

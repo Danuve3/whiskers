@@ -187,3 +187,27 @@ body:has(.sheet.open) .tuto { visibility: hidden; }
 /* avisos y banners: se cierran con un toque */
 .toast, .banner { pointer-events: auto; cursor: pointer; }
 .toast.out, .banner.out { pointer-events: none; }
+
+/* con un banner de logro en pantalla, los avisos bajan para no quedar tapados */
+.toasts { transition: top 0.3s ease; }
+body:has(.banner:not(.out)) .toasts { top: calc(env(safe-area-inset-top) + var(--u) * 68); }
+
+/* Navegación: carteles de salida y mapa */
+.exit-signs { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+.exit-sign { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 calc(var(--u) * 2); font-size: calc(var(--u) * 6.5);
+  border-width: calc(var(--u) * 4); min-height: calc(var(--u) * 12); }
+.exit-sign .arrow { transition: transform 0.2s; }
+.exit-sign.locked { opacity: 0.7; }
+.exit-sign.edge { opacity: 0.92; }
+.exit-sign.locked.edge { opacity: 0.6; }
+body:has(.sheet.open) .exit-signs, body:has(.radial) .exit-signs, body:has(.title-screen) .exit-signs { visibility: hidden; }
+.mapbtn { position: fixed; right: calc(var(--u) * 3); top: calc(env(safe-area-inset-top) + var(--u) * 3); }
+.map .zones { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+.zone-row { display: flex; align-items: center; gap: calc(var(--u) * 4); padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  border: calc(var(--u) * 1) solid #c9b8a8; background: #fff4dc; }
+.zone-row .info { flex: 1; }
+.zone-row .name { font-size: calc(var(--u) * 8); color: #5e3f36; }
+.zone-row.current { border-color: #e86a5c; background: #fbe7a1; }
+.zone-row.locked .name { color: #9c8a8f; }
+.zone-row .here { font-size: calc(var(--u) * 6); color: #7a3a3a; }

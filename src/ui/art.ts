@@ -489,6 +489,24 @@ export const HEART_EMPTY = ['.kk.kk.', 'k..k..k', 'k.....k', 'k.....k', '.k...k.
 export function heartIcon(full: boolean): string {
   return dataURL(full ? 'h1' : 'h0', full ? HEART_FULL : HEART_EMPTY, { ...IK, '.': full ? null : null });
 }
+ICONS.mapa = [
+  '................',
+  '................',
+  '.kkkkkkkkkkkkkk.',
+  '.kwwwwcccccwwwk.',
+  '.kwggwcccccrrrk.',
+  '.kwggwcSSccrYrk.',
+  '.kwwwwcSSccwrwk.',
+  '.knnnnnnnnnnnnk.',
+  '.kwwwwcccccwnwk.',
+  '.kwgwwcccSSwnwk.',
+  '.kwwwwcccSSwnwk.',
+  '.kwwnwcccccwwwk.',
+  '.kwwnwcccccwggk.',
+  '.kkkkkkkkkkkkkk.',
+  '................',
+  '................',
+];
 ICONS.dcha = ICONS.izq.map((r) => r.split('').reverse().join(''));
 
 export function icon(name: string): string {
