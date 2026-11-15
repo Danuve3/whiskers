@@ -204,9 +204,12 @@ body:has(.banner:not(.out)) .toasts { top: calc(env(safe-area-inset-top) + var(-
   display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 calc(var(--u) * 2); font-size: calc(var(--u) * 6.5);
   border-width: calc(var(--u) * 4); min-height: calc(var(--u) * 12); }
 .exit-sign .arrow { transition: transform 0.2s; }
-.exit-sign.locked { opacity: 0.7; }
-.exit-sign.edge { opacity: 0.92; }
-.exit-sign.locked.edge { opacity: 0.6; }
+.exit-sign { opacity: 0.88; font-size: calc(var(--u) * 6); transition: opacity 0.35s; }
+.exit-sign.locked { opacity: 0.6; }
+/* fuera de la vista: solo una flechita discreta en el borde */
+.exit-sign.edge { opacity: 0.55; padding: 0 calc(var(--u) * 1); min-height: calc(var(--u) * 11); border-width: calc(var(--u) * 3); }
+.exit-sign.edge span { display: none; }
+.exit-signs.quiet .exit-sign { opacity: 0.12; pointer-events: none; }
 body:has(.sheet.open) .exit-signs, body:has(.radial) .exit-signs, body:has(.title-screen) .exit-signs { visibility: hidden; }
 .mapbtn { position: fixed; right: calc(var(--u) * 3); top: calc(env(safe-area-inset-top) + var(--u) * 3); }
 .map .zones { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }

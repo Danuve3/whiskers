@@ -13,6 +13,8 @@ export interface Settings {
   haptics?: boolean;
   /** recordatorio diario (por defecto, no) */
   reminder?: boolean;
+  /** carteles sobre las salidas (por defecto, sí) */
+  exitSigns?: boolean;
 }
 
 export interface SaveData {

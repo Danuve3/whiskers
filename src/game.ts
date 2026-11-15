@@ -144,6 +144,11 @@ export class Game {
     return best;
   }
 
+  /** ¿Va el jugador hacia una salida elegida en un cartel? */
+  get headingToExit(): boolean {
+    return !!this.exitIntent;
+  }
+
   /** Ir andando hasta una salida y cambiar de zona al llegar. */
   goToExit(ex: Exit): void {
     const pm = this.player.m;

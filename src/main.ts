@@ -333,6 +333,7 @@ void (async () => {
     tickHud();
     setInterval(tickHud, 10000);
     // navegación: carteles sobre las salidas y mapa del barrio
+    ExitSigns.enabled = save.settings.exitSigns !== false;
     new ExitSigns(game);
     new RecenterButton(game);
     const mapBtn = el('div', { class: 'mapbtn' }, button(iconImg('mapa'), () => {

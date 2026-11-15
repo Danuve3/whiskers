@@ -22,6 +22,10 @@ export class ExitSigns {
   private root = el('div', { class: 'exit-signs' });
   private signs: Sign[] = [];
   private zone: ZoneId | null = null;
+  /** último momento en que el personaje andaba: mientras pasea, los carteles se apartan */
+  private lastMove = 0;
+  /** se pueden quitar desde Ajustes */
+  static enabled = true;
 
   constructor(private game: Game) {
     document.getElementById('ui')!.append(this.root);
@@ -59,6 +63,12 @@ export class ExitSigns {
     const g = this.game;
     if (!g.grid) return;
     if (g.zoneId !== this.zone) this.build();
+    this.root.style.display = ExitSigns.enabled ? '' : 'none';
+    if (!ExitSigns.enabled) return;
+    // mientras caminas (salvo hacia una salida) los carteles se quedan casi transparentes
+    const pmv = g.player.m;
+    if (pmv.moving && !g.headingToExit) this.lastMove = performance.now();
+    this.root.classList.toggle('quiet', performance.now() - this.lastMove < 1200);
     const v = g.view;
     const camX = Math.round(g.cam.x - v.w / 2), camY = Math.round(g.cam.y - v.h / 2);
     const k = v.zoom / v.dpr;
@@ -82,11 +92,17 @@ export class ExitSigns {
       const z = g.grid.height[ty * g.grid.w + tx] ?? 4;
       const wx = cx * 16, wy = cy * 16;
       const x = (2 * (wx - wy) - camX) * k, y = (wx + wy - z - camY) * k;
+      // fuera de la vista: solo una flechita en el borde; las cerradas, ni eso (para eso está el mapa)
+      const off = x < side || x > W - side || y - 6 * u < top || y - 6 * u > bottom;
+      const near = Math.hypot(pm.x - cx * 16, pm.y - cy * 16) / 16 < 7;
+      const hide = !open && (off || !near);
+      s.node.style.display = hide ? 'none' : '';
+      if (hide) continue;
+      s.node.classList.toggle('edge', off);
       const w = s.node.offsetWidth, h = s.node.offsetHeight;
       const minX = side + w / 2, maxX = W - side - w / 2;
       const px = Math.max(minX, Math.min(maxX, x));
       const py = Math.max(top + h, Math.min(bottom, y - 6 * u));
-      const off = px !== x || py !== y - 6 * u;
       // flecha: hacia abajo si se ve la salida; si no, hacia el borde por el que queda
       let rot = 90;
       if (off) {
@@ -94,7 +110,6 @@ export class ExitSigns {
         rot = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 180) : dy > 0 ? 90 : -90;
       }
       s.arrow.style.transform = `rotate(${rot}deg)`;
-      s.node.classList.toggle('edge', off);
       placed.push({ s, px, py, w, h });
     }
     // que no se pisen: de arriba abajo, se baja el que solape con uno anterior

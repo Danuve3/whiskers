@@ -3,6 +3,7 @@ import { Sheet, el, button, setHaptics, haptic } from './kit.ts';
 import { exportJSON, importJSON, type SaveData } from '../save/save.ts';
 import { toast } from './animalUI.ts';
 import { setReminder } from '../reminder.ts';
+import { ExitSigns } from './nav.ts';
 
 export function openSettings(save: SaveData, applyAudio: () => void, onImport: (d: SaveData) => void): void {
   const sheet = new Sheet('Ajustes', 'settings');
@@ -25,6 +26,11 @@ export function openSettings(save: SaveData, applyAudio: () => void, onImport: (
     setHaptics(S.haptics);
     vib.textContent = S.haptics ? 'Vibración: sí' : 'Vibración: no';
     haptic(12);
+  });
+  const signs = button(S.exitSigns === false ? 'Carteles de salida: no' : 'Carteles de salida: sí', () => {
+    S.exitSigns = S.exitSigns === false;
+    ExitSigns.enabled = S.exitSigns;
+    signs.textContent = S.exitSigns ? 'Carteles de salida: sí' : 'Carteles de salida: no';
   });
   const remLabel = () => (S.reminder ? 'Recordatorio diario: sí' : 'Recordatorio diario: no');
   const rem = button(remLabel(), async () => {
@@ -62,6 +68,7 @@ export function openSettings(save: SaveData, applyAudio: () => void, onImport: (
   sheet.body.append(
     slider('Música', 'music'), slider('Efectos', 'sfx'), slider('Ambiente', 'ambient'),
     el('div', { class: 'row center' }, mute, vib),
+    el('div', { class: 'row center' }, signs),
     el('div', { class: 'row center' }, rem),
     el('div', { class: 'row center' }, exp, imp, file),
     el('div', { class: 'footer' }, close),
