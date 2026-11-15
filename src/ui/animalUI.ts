@@ -57,7 +57,17 @@ function uiUnit(): number {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 2;
 }
 
-export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onLaser?: (e: Entry) => void, onTrick?: (e: Entry) => void): void {
+/** Juegos que se ofrecen desde el botón «Jugar» del menú. */
+export interface PlayHandlers {
+  laser?: (e: Entry) => void;
+  hide?: (e: Entry) => void;
+  ball?: (e: Entry) => void;
+  trick?: (e: Entry) => void;
+  brush?: (e: Entry) => void;
+  bath?: (e: Entry) => void;
+}
+
+export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, play: PlayHandlers = {}): void {
   closeRadial();
   const D = e.data;
   if (species(D) === 'cat') sfx.meow(e.ent.look.shape.legH);
@@ -101,42 +111,66 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   root.append(ring, tag, why);
   const inv = game.world.inventory;
   const specials = (Object.keys(FOODS) as FoodId[]).filter((f) => f !== 'pienso' && (inv[f] ?? 0) > 0);
-  type B = { icon: string; act: Action | 'card' | 'laser' | 'trick'; label: string };
+  type B = { icon: string; act: Action | 'card' | 'play'; label: string };
   const items: B[] = [
     { icon: foodIcon(D), act: 'feed', label: 'Dar de comer' },
     { icon: 'gota', act: 'water', label: 'Dar agua' },
     { icon: 'cruz', act: 'heal', label: 'Curar' },
     { icon: 'corazon', act: 'pet', label: 'Acariciar' },
+    { icon: 'jugar', act: 'play', label: 'Jugar' },
     { icon: 'ficha', act: 'card', label: 'Ficha' },
   ];
-  if (species(D) === 'cat') items.splice(4, 0, { icon: 'laser', act: 'laser', label: 'Jugar con el láser' });
-  // perros que ya confían: enseñarles un truco nuevo
-  if (onTrick && nextTrick(D)) items.splice(4, 0, { icon: 'hueso', act: 'trick', label: 'Enseñar un truco' });
+  // juegos según la especie y la confianza (los que aún no puede, con el motivo)
+  const h = hearts(D), cat = species(D) === 'cat';
+  type P = { label: string; fn?: (e: Entry) => void; need: number; why: string; show?: boolean };
+  const games: P[] = cat
+    ? [
+      { label: 'Láser', fn: play.laser, need: 2, why: 'Aún le da miedo jugar contigo (2 corazones)' },
+      { label: 'Escondite', fn: play.hide, need: 3, why: 'Para jugar al escondite tiene que confiar más (3 corazones)' },
+      { label: 'Cepillar', fn: play.brush, need: 2, why: 'Aún no se deja cepillar (2 corazones)' },
+    ]
+    : [
+      { label: 'Pelota', fn: play.ball, need: 2, why: 'Aún no se fía para jugar (2 corazones)' },
+      { label: 'Truco nuevo', fn: play.trick, need: 3, why: 'Para aprender trucos tiene que confiar más (3 corazones)', show: !!nextTrick(D) || h < 3 },
+      { label: 'Cepillar', fn: play.brush, need: 2, why: 'Aún no se deja cepillar (2 corazones)' },
+      { label: 'Bañar', fn: play.bath, need: 2, why: 'Aún no se deja bañar (2 corazones)', show: !!D.muddy },
+    ];
   const R = items.length > 5 ? 38 : 34; // radio en unidades de UI
   let foodRow: HTMLElement | null = null;
   items.forEach((it, i) => {
     const a = Math.PI + (i / (items.length - 1)) * Math.PI; // arco por encima
-    const avail = it.act === 'card' || it.act === 'trick' ? { ok: true } : it.act === 'laser' ? (hearts(D) >= 2 ? { ok: true } : { ok: false, reason: 'Aún le da miedo jugar contigo (2 corazones)' }) : canDo(D, it.act);
+    const avail = it.act === 'card' ? { ok: true } : it.act === 'play' ? (h >= 2 ? { ok: true } : { ok: false, reason: 'Aún no se fía para jugar contigo (2 corazones)' }) : canDo(D, it.act);
     const b = button(iconImg(it.icon), () => {
       if (it.act === 'card') {
         closeRadial();
         onCard(e);
         return;
       }
-      if (it.act === 'trick') {
-        closeRadial();
-        onTrick?.(e);
-        return;
-      }
-      if (it.act === 'laser') {
+      if (it.act === 'play') {
         if (!avail.ok) {
           sfx.ui('nope');
           why.textContent = avail.reason ?? '';
           why.style.display = '';
           return;
         }
-        closeRadial();
-        onLaser?.(e);
+        // fila de juegos (como la de comidas)
+        foodRow?.remove();
+        foodRow = el('div', { class: 'foodrow' });
+        for (const g of games.filter((x) => x.show !== false && x.fn)) {
+          foodRow.append(button(g.label, () => {
+            if (h < g.need) {
+              sfx.ui('nope');
+              why.textContent = g.why;
+              why.style.display = '';
+              return;
+            }
+            closeRadial();
+            g.fn!(e);
+          }, h < g.need ? 'off' : ''));
+        }
+        foodRow.style.left = '0px';
+        foodRow.style.top = `calc(var(--u) * 14)`;
+        root.append(foodRow);
         return;
       }
       if (!avail.ok) {

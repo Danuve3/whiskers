@@ -5,6 +5,7 @@ import { getFrames } from '../sprites/animals.ts';
 import { makeLook } from '../sprites/breeds.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import * as sfx from '../audio/sfx.ts';
+import { pickFish, tideAt, type FishCtx, type FishDef } from '../sim/fishing.ts';
 
 // ---------------------------------------------------------------- Decoración
 type Key = Record<string, ColorName | null>;
@@ -69,28 +70,41 @@ export function openWelcome(w: Welcome): void {
 }
 
 // ---------------------------------------------------------------- Pesca
-/** Minijuego tranquilo: esperar a que pique y tirar. Sin castigo si se escapa. */
-export function openFishing(onCatch: () => void): void {
+/**
+ * Minijuego tranquilo: esperar a que pique y tirar. Qué pica depende de la hora, la marea, el tiempo y
+ * la estación; los rápidos (caballa, lubina) dan menos tiempo para tirar. Sin castigo si se escapa.
+ */
+export function openFishing(ctx: () => FishCtx, onCatch: (f: FishDef) => void): void {
   const sheet = new Sheet('Pesca en el espigón', 'fishing');
   const c = el('canvas', { width: 120, height: 72, class: 'vignette' });
   const x = c.getContext('2d')!;
+  const cond = () => {
+    const k = ctx();
+    const h = k.hour;
+    const when = h < 6.5 || h >= 21 ? 'de noche' : h < 12 ? 'por la mañana' : h < 18.5 ? 'por la tarde' : 'al atardecer';
+    return `Marea ${k.tide} · ${when}${k.rain > 0.3 ? ' · lloviendo' : ''}`;
+  };
+  const info = el('div', { class: 'small center' }, cond());
   const msg = el('p', { class: 'wl center' }, 'Lanza el anzuelo y espera a que pique…');
   let state: 'idle' | 'wait' | 'bite' | 'caught' | 'miss' = 'idle';
   let t = 0, biteAt = 0;
+  let fish: FishDef | null = null;
   const act = button('Lanzar', () => {
     if (state === 'idle' || state === 'caught' || state === 'miss') {
       state = 'wait';
       t = 0;
+      fish = pickFish(ctx(), Math.random);
       biteAt = 2 + Math.random() * 4;
+      info.textContent = cond();
       msg.textContent = 'Paciencia… (el mar no tiene prisa)';
       act.textContent = 'Tirar';
       sfx.pour();
-    } else if (state === 'bite') {
+    } else if (state === 'bite' && fish) {
       state = 'caught';
-      msg.textContent = '¡Una sardina! Al cubo.';
+      msg.textContent = `¡${fish.name}! ${fish.text}`;
       act.textContent = 'Otra vez';
       sfx.gift();
-      onCatch();
+      onCatch(fish);
     } else if (state === 'wait') {
       msg.textContent = 'Todavía no ha picado. Espera a ver el «!»';
     }
@@ -107,12 +121,13 @@ export function openFishing(onCatch: () => void): void {
       t = 0;
       sfx.ui('open');
     }
-    if (state === 'bite' && t > 1.1) {
+    if (state === 'bite' && fish && t > fish.window) {
       state = 'miss';
-      msg.textContent = 'Se ha escapado… no pasa nada, inténtalo otra vez.';
+      msg.textContent = fish.window < 0.9 ? 'Era de los rápidos y se ha escapado… no pasa nada.' : 'Se ha escapado… no pasa nada, inténtalo otra vez.';
       act.textContent = 'Lanzar';
     }
-    // dibujo: mar con ondas, sedal y corcho
+    // dibujo: mar con ondas, sedal y corcho (el nivel del agua sigue la marea)
+    const lvl = Math.round(tideAt(Date.now()).level * 3);
     x.fillStyle = PALETTE.water2;
     x.fillRect(0, 0, 120, 72);
     x.fillStyle = PALETTE.water3;
@@ -122,11 +137,11 @@ export function openFishing(onCatch: () => void): void {
     }
     x.fillStyle = PALETTE.water1;
     for (let i = 0; i < 6; i++) x.fillRect((i * 23 + Math.floor(now / 140)) % 130 - 10, (i * 13 + 5) % 72, 5, 1);
-    // espigón
+    // espigón (más piedra a la vista con la marea baja)
     x.fillStyle = PALETTE.cal1;
-    x.fillRect(0, 60, 120, 12);
+    x.fillRect(0, 60 - lvl, 120, 12 + lvl);
     x.fillStyle = PALETTE.stone2;
-    x.fillRect(0, 60, 120, 1);
+    x.fillRect(0, 60 - lvl, 120, 1);
     if (state !== 'idle') {
       const bx = 70, by = 30 + Math.round(Math.sin(now / 300) * 1) + (state === 'bite' ? 3 + Math.round(Math.sin(now / 50) * 2) : 0);
       x.fillStyle = PALETTE.ink2;
@@ -140,14 +155,15 @@ export function openFishing(onCatch: () => void): void {
         x.fillRect(bx + 4, by - 10, 2, 5);
         x.fillRect(bx + 4, by - 4, 2, 2);
       }
-      if (state === 'caught') {
-        x.drawImage(matrix('sardina', ['..kkkkk.k', '.kSswwwkSk', 'kwSSSSSSSk', '.kkkkkkk.k'], { '.': null, k: 'water1', S: 'water3', s: 'ink', w: 'cal4' }), bx - 5, by - 14);
+      if (state === 'caught' && fish) {
+        const img = matrix('pez-' + fish.id, fish.rows, { '.': null, ...fish.key });
+        x.drawImage(img, bx - Math.floor(img.width / 2), by - 8 - img.height);
       }
     }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
-  sheet.body.append(c, msg, el('div', { class: 'footer' }, act, button('Volver', () => {
+  sheet.body.append(info, c, msg, el('div', { class: 'footer' }, act, button('Volver', () => {
     alive = false;
     void sheet.close();
   })));

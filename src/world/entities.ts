@@ -227,6 +227,8 @@ export class Animal implements Drawable {
   sink = 0;
   /** gorrito de visitante de temporada */
   acc: string | null = null;
+  /** manchas de barro (perros después de la lluvia) */
+  mud = false;
   /** gorrito de Navidad */
   hat = false;
 
@@ -338,6 +340,12 @@ export class Animal implements Drawable {
     if (this.hat && f.top) {
       const h = santaHat();
       ctx.drawImage(h, X + f.top[0] - 3, Y + f.top[1] - 4);
+    }
+    // barro: manchitas en patas y tripa
+    if (this.mud) {
+      const L = this.look.shape.legH;
+      ctx.fillStyle = PALETTE.wood1;
+      for (const [dx, dy] of [[-7, 2], [-3, 3], [2, 2], [6, 3], [-5, Math.round(L * 0.9)], [3, Math.round(L)], [0, Math.round(L * 1.2)]] as const) ctx.fillRect(X + f.ox + dx, Y + f.oy - dy, 2, 1);
     }
     // gorrito de visitante de temporada
     if (this.acc && f.top) {

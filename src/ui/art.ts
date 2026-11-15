@@ -616,6 +616,24 @@ ICONS.hueso = [
   '................',
   '................',
 ];
+ICONS.jugar = [
+  '................',
+  '................',
+  '.......kk.......',
+  '.....kkLLkk.....',
+  '...kkLLLlpLkk...',
+  '...kLpLllLpLk...',
+  '..kLLLplLLlpLk..',
+  '..kLLllpLllLLk..',
+  '..kLllLLplLLLk..',
+  '..kLpLLllpLlLk..',
+  '..kLLpllLLplLk..',
+  '...kLlpLLllLk...',
+  '...kkLLpllLkk...',
+  '.....kkLLkk.kLL.',
+  '.......kk....kL.',
+  '................',
+];
 ICONS.dcha = ICONS.izq.map((r) => r.split('').reverse().join(''));
 
 export function icon(name: string): string {

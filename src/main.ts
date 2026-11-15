@@ -15,6 +15,8 @@ import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
 import { rewardText, NEIGHBORS } from './sim/progress.ts';
 import { lifeLines, openTrickGame, openAdoption } from './ui/life.ts';
+import { openBrush, openBath } from './ui/games.ts';
+import { tideAt } from './sim/fishing.ts';
 import { REQUEST_ACTION, REQUEST_BONUS, MOMENTS, nextTrick, pickMother, makeLitter, adoptionCandidate, letterText, ADOPTERS } from './sim/life.ts';
 import { makeLook } from './sprites/breeds.ts';
 import { SETS, setProgress, VISITORS } from './sim/collect.ts';
@@ -200,21 +202,52 @@ game.events = {
   animalTap: (e) => {
     tuto?.event('tapAnimal');
     const wasKnown = e.data.known;
-    openRadial(game, e, (en) => card(en.data), (en) => {
-      game.startLaser(en);
-      laserBar.style.display = '';
-      fulfil(en, 'laser');
-    }, (en) => {
-      const tr = nextTrick(en.data);
-      if (!tr) return;
-      openTrickGame(en.data, en.ent.look, tr.name, () => {
-        (en.data.tricks ??= []).push(tr.id);
-        bump(host, 'trucos');
-        en.data.trust = Math.min(5, en.data.trust + 0.2);
-        check();
-      });
+    openRadial(game, e, (en) => card(en.data), {
+      laser: (en) => {
+        game.startLaser(en);
+        laserBar.style.display = '';
+        fulfil(en, 'laser');
+      },
+      trick: (en) => {
+        const tr = nextTrick(en.data);
+        if (!tr) return;
+        openTrickGame(en.data, en.ent.look, tr.name, () => {
+          (en.data.tricks ??= []).push(tr.id);
+          bump(host, 'trucos');
+          en.data.trust = Math.min(5, en.data.trust + 0.2);
+          check();
+        });
+      },
+      ball: (en) => game.startBall(en),
+      hide: (en) => {
+        if (!game.startHide(en)) toast(`${en.data.name} no encuentra dónde esconderse aquí. Prueba en otra zona.`);
+      },
+      brush: (en) => openBrush(en.data, en.ent.look, () => {
+        playReward(en, 'cepillados', 0.15, 0.3);
+        toast(`${en.data.name} tiene el pelo suavísimo.`);
+      }),
+      bath: (en) => openBath(en.data, en.ent.look, () => {
+        en.data.muddy = false;
+        playReward(en, 'banos', 0.15, 0.35);
+        toast(`${en.data.name} está limpio y huele a jabón de lavanda.`);
+      }),
     });
     if (!wasKnown) check();
+  },
+  playHint: (text) => {
+    playBar.style.display = text ? '' : 'none';
+    if (text) playText.textContent = text;
+  },
+  playDone: (e, kind, extra) => {
+    if (kind === 'pelota') {
+      playReward(e, 'pelota', 0.25, 0.25);
+      toast(`¡${e.data.name} ha traído la pelota ${extra} veces! Está feliz y cansado.`);
+      fulfil(e, 'pet');
+    } else {
+      playReward(e, 'escondite', 0.3, 0.2);
+      toast(`¡Encontraste a ${e.data.name}! (${extra} s). Le ha encantado el juego.`);
+      fulfil(e, 'laser');
+    }
   },
   laserDone: (e) => {
     laserBar.style.display = 'none';
@@ -347,11 +380,38 @@ let tuto: Tutorial | null = null;
 
 const laserBar = el('div', { class: 'laserbar panel ui-text' }, 'Arrastra el dedo para mover el punto rojo');
 laserBar.style.display = 'none';
-const fishBtn = button(el('span', { style: 'display:flex;align-items:center;gap:6px' }, iconImg('anzuelo', 'icon small'), 'Pescar'), () => openFishing(() => {
-  W.inventory.sardinas = (W.inventory.sardinas ?? 0) + 1;
-  bump(host, 'pesca');
+// barra de los juegos en el barrio (pelota, escondite), con × para dejarlo
+const playText = el('span', {});
+const playStop = el('button', { class: 'tuto-x', 'aria-label': 'Dejar de jugar' }, '×');
+playStop.addEventListener('pointerup', (ev) => {
+  ev.stopPropagation();
+  game.stopPlay();
+});
+const playBar = el('div', { class: 'laserbar playbar panel ui-text' }, playText, playStop);
+playBar.style.display = 'none';
+/** Recompensa común de los juegos: confianza, bienestar, estadística y +♥. */
+function playReward(e: Entry, stat: string, trust: number, well: number): void {
+  e.data.trust = Math.min(5, e.data.trust + trust);
+  e.data.trustMax = Math.max(e.data.trustMax, e.data.trust);
+  e.data.wellbeing = Math.min(1, e.data.wellbeing + well);
+  e.data.lastCare = Date.now();
+  bump(host, stat);
+  bump(host, 'juegos');
+  game.floatTrust(e, false);
+  haptic([10, 40, 10]);
   check();
-}), 'floatbtn');
+}
+const fishBtn = button(el('span', { style: 'display:flex;align-items:center;gap:6px' }, iconImg('anzuelo', 'icon small'), 'Pescar'), () => openFishing(
+  () => ({ hour: game.hour, rain: game.weather.rain, season: game.season, tide: tideAt(Date.now()).tide }),
+  (f) => {
+    const F = (W.meta.fish ??= {});
+    const first = !F[f.id];
+    F[f.id] = (F[f.id] ?? 0) + 1;
+    if (f.food) W.inventory[f.food.id] = (W.inventory[f.food.id] ?? 0) + f.food.n;
+    bump(host, 'pesca');
+    if (first) toast(`Nueva captura para tu colección: ${f.name}.`);
+    check();
+  }), 'floatbtn');
 fishBtn.style.display = 'none';
 
 function decorSheet() {
@@ -434,7 +494,7 @@ void (async () => {
     setTimeout(lifeTick, 8000);
     setInterval(lifeTick, 30000);
   }
-  document.getElementById('ui')!.append(laserBar, fishBtn);
+  document.getElementById('ui')!.append(laserBar, playBar, fishBtn);
   setInterval(() => {
     const f = game.zoneDef.fishing;
     const near = !!f && Math.hypot(game.player.m.tx - f[0], game.player.m.ty - f[1]) <= 2.2 && !game.player.m.moving;

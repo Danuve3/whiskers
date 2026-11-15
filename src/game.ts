@@ -75,6 +75,9 @@ export interface GameEvents {
   friends?(a: Entry, b: Entry): void;
   moment?(id: MomentId, e: Entry): void;
   routine?(e: Entry, text: string): void;
+  /** juegos en el barrio */
+  playDone?(e: Entry, game: 'pelota' | 'escondite', extra: number): void;
+  playHint?(text: string | null): void;
   treasure?(def: TreasureDef): void;
   visitor?(e: Entry, first: boolean): void;
 }
@@ -129,6 +132,155 @@ export class Game {
   /** Animal en el que se centra la cámara mientras su menú está abierto. */
   private focus: { e: Entry; prevFollow: boolean } | null = null;
   bounds: [number, number, number, number] = [0, 0, 0, 0];
+  // ---------------------------------------------------------------- Pelota y escondite
+  /** pelota con un perro: lanzar tocando el suelo, él la trae */
+  ball: { e: Entry; phase: 'aim' | 'fly' | 'fetch' | 'return'; x: number; y: number; z: number; from: [number, number, number]; to: [number, number, number]; t: number; throws: number } | null = null;
+  /** escondite con un gato */
+  hide: { e: Entry; tx: number; ty: number; t: number; hidden: boolean; meowT: number } | null = null;
+
+  startBall(e: Entry): void {
+    this.stopPlay();
+    e.ent.m.stop();
+    e.brain.mode = 'care';
+    e.brain.t = 9999;
+    const pm = this.player.m;
+    this.ball = { e, phase: 'aim', x: pm.x, y: pm.y, z: pm.z, from: [pm.x, pm.y, pm.z], to: [pm.x, pm.y, pm.z], t: 0, throws: 0 };
+    this.pop.goTo(e, pm.tx + 1, pm.ty + 1, 'trot');
+    this.events.playHint?.(`Toca el suelo para lanzar la pelota a ${e.data.name} (5 lanzamientos)`);
+  }
+
+  startHide(e: Entry): boolean {
+    this.stopPlay();
+    const pm = this.player.m, G = this.grid;
+    // detrás de algo: el lado de atrás (−x o −y) de un objeto del barrio, lejos de ti
+    const spots: [number, number][] = [];
+    for (const o of this.objects) {
+      if (/casa|pretil|muro|panaderia|nave|mercado|pescaderia|tu-casa|escalera/.test(o.kind)) continue;
+      const [x0, y0, , x1, y1] = o.box;
+      for (const [tx, ty] of [[Math.floor(x0 / TILE) - 1, Math.floor((y0 + y1) / 2 / TILE)], [Math.floor((x0 + x1) / 2 / TILE), Math.floor(y0 / TILE) - 1]] as [number, number][])
+        if (walkable(G, tx, ty) && Math.hypot(tx - pm.tx, ty - pm.ty) >= 5) spots.push([tx, ty]);
+    }
+    if (!spots.length) return false;
+    const [tx, ty] = spots[Math.floor(Math.random() * spots.length)];
+    e.brain.mode = 'care';
+    e.brain.t = 9999;
+    if (!this.pop.goTo(e, tx, ty, 'run')) {
+      e.brain.mode = 'idle';
+      return false;
+    }
+    this.hide = { e, tx, ty, t: 0, hidden: false, meowT: 4 };
+    this.events.playHint?.(`${e.data.name} se ha escondido… ¡búscalo! Escucha sus maullidos.`);
+    return true;
+  }
+
+  /** Termina el juego en curso (sin castigo). */
+  stopPlay(): void {
+    for (const P of [this.ball?.e, this.hide?.e]) if (P) {
+      P.brain.mode = 'idle';
+      P.brain.think = 1;
+    }
+    this.ball = null;
+    this.hide = null;
+    this.events.playHint?.(null);
+  }
+
+  private updatePlay(dt: number): void {
+    const B = this.ball;
+    if (B) {
+      const e = B.e, A = e.ent.m;
+      if (!this.pop.entries.includes(e)) return this.stopPlay();
+      if (B.phase === 'fly') {
+        B.t += dt;
+        const k = Math.min(1, B.t / 0.75);
+        B.x = B.from[0] + (B.to[0] - B.from[0]) * k;
+        B.y = B.from[1] + (B.to[1] - B.from[1]) * k;
+        B.z = B.from[2] + (B.to[2] - B.from[2]) * k + Math.sin(k * Math.PI) * 26;
+        if (k >= 1) {
+          B.phase = 'fetch';
+          sfx.ui('tap');
+          if (!this.pop.goTo(e, Math.floor(B.x / TILE), Math.floor(B.y / TILE), 'run')) {
+            // no llega: la pelota vuelve rodando
+            B.phase = 'aim';
+            const pm = this.player.m;
+            B.x = pm.x;
+            B.y = pm.y;
+            B.z = pm.z;
+          }
+        }
+      } else if (B.phase === 'fetch') {
+        if (Math.hypot(A.x - B.x, A.y - B.y) / TILE < 0.9 || (!A.moving && Math.hypot(A.x - B.x, A.y - B.y) / TILE < 1.6)) {
+          B.phase = 'return';
+          e.ent.react('note', 1);
+          const pm = this.player.m;
+          this.pop.goTo(e, pm.tx, pm.ty, 'trot');
+        } else if (!A.moving) this.pop.goTo(e, Math.floor(B.x / TILE), Math.floor(B.y / TILE), 'run');
+      } else if (B.phase === 'return') {
+        const pm = this.player.m;
+        const d = Math.hypot(A.x - pm.x, A.y - pm.y) / TILE;
+        if (d < 1.5 && !A.moving || d < 1.0) {
+          A.stop();
+          B.throws++;
+          B.phase = 'aim';
+          B.x = A.x;
+          B.y = A.y;
+          B.z = A.z;
+          e.ent.play('wag');
+          e.ent.react('heart', 1.4);
+          if (B.throws >= 5) {
+            this.ball = null;
+            e.brain.mode = 'idle';
+            e.brain.think = 2;
+            this.events.playHint?.(null);
+            this.events.playDone?.(e, 'pelota', 5);
+            return;
+          }
+          this.events.playHint?.(`¡Otra vez! Toca el suelo para lanzar (${B.throws}/5)`);
+        } else if (!A.moving) this.pop.goTo(e, pm.tx, pm.ty, 'trot');
+      }
+    }
+    const S = this.hide;
+    if (S) {
+      const e = S.e, A = e.ent.m;
+      if (!this.pop.entries.includes(e)) return this.stopPlay();
+      S.t += dt;
+      if (!S.hidden && !A.moving) {
+        S.hidden = true;
+        e.ent.play('sit');
+      }
+      if (S.hidden) {
+        S.meowT -= dt;
+        if (S.meowT <= 0) {
+          S.meowT = 6 + Math.random() * 3;
+          sfx.meow(e.ent.look.shape.legH);
+          if (S.t > 30) e.ent.react('note', 1.5);
+        }
+        const pm = this.player.m;
+        if (Math.hypot(pm.x - A.x, pm.y - A.y) / TILE < 1.7) this.foundHidden();
+        else if (S.t > 120) {
+          // se cansa de esperar y sale a buscarte
+          this.hide = null;
+          e.brain.mode = 'idle';
+          this.pop.goTo(e, pm.tx, pm.ty, 'trot');
+          this.events.playHint?.(null);
+          this.events.toast(`¡${e.data.name} estaba escondido aquí! Ha salido él solito.`);
+        }
+      }
+    }
+  }
+
+  private foundHidden(): void {
+    const S = this.hide;
+    if (!S) return;
+    this.hide = null;
+    const e = S.e;
+    e.brain.mode = 'idle';
+    e.brain.think = 2;
+    e.ent.react('heart', 2);
+    e.ent.play('stretch');
+    this.events.playHint?.(null);
+    this.events.playDone?.(e, 'escondite', Math.round(S.t));
+  }
+
   /** Quita a un animal de la zona (adoptado). */
   removeAnimal(id: string): void {
     this.pop.entries = this.pop.entries.filter((e) => e.data.id !== id);
@@ -758,6 +910,34 @@ export class Game {
         return;
       }
     }
+    // pelota: tocar el suelo la lanza ahí
+    if (this.ball?.phase === 'aim') {
+      const heights = [...new Set(Array.from(this.grid.height))].sort((a, b) => b - a);
+      for (const h of heights) {
+        const [x, y] = screenToWorld(wx, wy, h);
+        const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+        if (tx < 0 || ty < 0 || tx >= this.grid.w || ty >= this.grid.h || this.grid.height[ty * this.grid.w + tx] !== h || !walkable(this.grid, tx, ty)) continue;
+        const pm = this.player.m, B = this.ball;
+        pm.dir = dirTo(pm.x, pm.y, x, y, pm.dir);
+        this.player.action = 'give';
+        this.player.actionT = 0.5;
+        B.from = [pm.x, pm.y, pm.z + 18];
+        B.to = [x, y, h];
+        B.t = 0;
+        B.phase = 'fly';
+        sfx.ui('open');
+        return;
+      }
+      return;
+    }
+    // escondite: tocar al gato escondido lo encuentra
+    if (this.hide?.hidden) {
+      const [sx, sy] = this.hide.e.ent.screenPos();
+      if (Math.abs(wx - sx) < 16 && wy > sy - 26 && wy < sy + 6) {
+        this.foundHidden();
+        return;
+      }
+    }
     // tesoros: ir a recogerlos
     for (const T of this.treasures) {
       const sx = 2 * (T.x - T.y), sy = T.x + T.y - T.z;
@@ -865,6 +1045,7 @@ export class Game {
     });
     this.handlePending(dt);
     this.updateStepBack(dt);
+    this.updatePlay(dt);
     this.treasureT -= dt;
     if (this.treasureT <= 0) {
       this.treasureT = 150 + Math.random() * 120;
@@ -908,7 +1089,10 @@ export class Game {
         shelters: [...this.zone.meta.shelters, ...this.decor.filter((d) => d.id === 'caseta').map((d) => [d.tx - 0.5, d.ty - 0.5, d.tx + 1.5, d.ty + 1.5] as [number, number, number, number])], approaching: this.pending?.e.data.id ?? null,
       });
     } else for (const e of this.pop.entries) e.ent.update(dt, this.grid);
-    for (const e of this.pop.entries) e.ent.bandage = e.brain.bandage > 0;
+    for (const e of this.pop.entries) {
+      e.ent.bandage = e.brain.bandage > 0;
+      e.ent.mud = !!e.data.muddy;
+    }
     // momentos raros: solo cuentan si los has visto
     for (const M of this.pendingMoments) {
       M.t -= dt;
@@ -1162,6 +1346,34 @@ export class Game {
       const [x, y, w, h] = o.rect!;
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
+    }
+    // la pelota (en el aire, en el suelo o en la boca del perro)
+    if (this.ball) {
+      const B = this.ball, e = B.e;
+      const carried = B.phase === 'return';
+      const [px, py, pz] = carried ? [e.ent.m.x, e.ent.m.y, e.ent.m.z + e.ent.look.shape.legH * 1.5] : [B.x, B.y, B.z];
+      const bsx = 2 * (px - py), bsy = px + py - pz;
+      const gz = carried ? e.ent.m.z : B.phase === 'fly' ? B.from[2] + (B.to[2] - B.from[2]) * Math.min(1, B.t / 0.75) : B.z;
+      list.push({
+        box: [px - 2, py - 2, pz, px + 2, py + 2, pz + 3], rect: [bsx - 3, bsy - 5, 6, 6],
+        draw: (ctx, cx, cy) => {
+          const X = Math.round(bsx - cx), Y = Math.round(bsy - cy);
+          if (!carried) {
+            ctx.fillStyle = PALETTE.stone1;
+            ctx.globalAlpha = 0.4;
+            ctx.fillRect(X - 2, Math.round(px + py - gz - cy), 4, 1);
+            ctx.globalAlpha = 1;
+          }
+          ctx.fillStyle = PALETTE.coral;
+          ctx.fillRect(X - 2, Y - 4, 4, 4);
+          ctx.fillRect(X - 1, Y - 5, 2, 6);
+          ctx.fillRect(X - 3, Y - 3, 6, 2);
+          ctx.fillStyle = PALETTE.cal4;
+          ctx.fillRect(X - 1, Y - 4, 1, 1);
+          ctx.fillStyle = PALETTE.rose;
+          ctx.fillRect(X + 1, Y - 1, 1, 1);
+        },
+      });
     }
     // tesoros escondidos: brillan de vez en cuando
     for (const T of this.treasures) {

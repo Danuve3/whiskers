@@ -7,6 +7,7 @@ import { species, type AnimalData } from '../sim/model.ts';
 import { bestFriend, stageName, MOMENTS, TRICKS, type Routine, type MomentId } from '../sim/life.ts';
 import type { MetaState } from '../meta/controller.ts';
 import { SETS, TREASURES, VISITORS, setProgress } from '../sim/collect.ts';
+import { FISH } from '../sim/fishing.ts';
 import { rewardText } from '../sim/progress.ts';
 import { dataURL } from './art.ts';
 import type { ColorName } from '../gfx/palette.ts';
@@ -75,6 +76,17 @@ export function collectionsGrid(grid: HTMLElement, meta: MetaState): string {
       el('div', { class: 'small' }, complete ? `¡Completa! Premio: ${rewardText(S.reward)}` : `${S.text} Premio: ${rewardText(S.reward)}`),
       items));
   }
+  // capturas del espigón
+  const F = meta.fish ?? {};
+  grid.append(el('div', { class: 'set panel' },
+    el('div', { class: 'nm' }, `Capturas del espigón · ${FISH.filter((f) => F[f.id]).length}/${FISH.length}`),
+    el('div', { class: 'small' }, 'Cada pez pica a su hora, con su marea y su tiempo.'),
+    el('div', { class: 'items' }, ...FISH.map((f) => {
+      const got = !!F[f.id];
+      const key: Record<string, ColorName | null> = { '.': null };
+      for (const [k, c] of Object.entries(f.key)) key[k] = got ? c : 'cal1';
+      return el('div', { class: `item ${got ? '' : 'unknown'}` }, el('img', { src: dataURL('pez-' + f.id + (got ? '' : '-x'), f.rows, key), class: 'gift' }), el('div', { class: 'small' }, got ? `${f.name} ×${F[f.id]}` : '???'));
+    }))));
   return `Colecciones: ${done} de ${SETS.length} completas`;
 }
 

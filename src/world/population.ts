@@ -200,6 +200,11 @@ export class Population {
     const rt = this.routineOf(e.data);
     return !!rt && e.brain.mode === 'routine' && !e.ent.m.moving && tdist(e.ent.m.x, e.ent.m.y, rt.tile[0] * TILE + 8, rt.tile[1] * TILE + 8) < 1.6;
   }
+  /** Mandar a un animal a una casilla (juegos dirigidos por el juego: pelota, escondite). */
+  goTo(e: Entry, tx: number, ty: number, kind: 'walk' | 'trot' | 'run' | 'sneak'): boolean {
+    return this.go(e, tx, ty, this.speeds(e)[kind]);
+  }
+
   /** Un animal amigo te lleva hasta un tesoro y se sienta a su lado. */
   pointAt(e: Entry, tx: number, ty: number): void {
     e.brain.mode = 'point';
@@ -749,6 +754,8 @@ export class Population {
       }
       return;
     }
+    // perros por la calle con lluvia: se embarran (luego se les puede bañar)
+    if (w.raining && A.m.moving && species(D) === 'dog' && B.mode !== 'shelter' && !D.muddy && Math.random() < dt * 0.04) D.muddy = true;
     if (B.think > 0 || A.m.moving) return;
     B.think = 2.5 + Math.random() * 4;
 

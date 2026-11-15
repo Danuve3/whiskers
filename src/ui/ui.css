@@ -262,3 +262,8 @@ body:has(.sheet.open) .strip, body:has(.title-screen) .strip, body:has(.laserbar
 .set .item .gift { width: calc(var(--u) * 14); height: calc(var(--u) * 14); image-rendering: pixelated; object-fit: contain; }
 .set .item .small { font-size: calc(var(--u) * 5); line-height: 1.15; }
 .set .item.unknown .small { color: #9c8a8f; }
+/* Juegos */
+.playbar { display: flex; align-items: center; gap: calc(var(--u) * 3); pointer-events: auto; max-width: 92vw; }
+.playbar .tuto-x { pointer-events: auto; }
+.vignette.play { touch-action: none; cursor: crosshair; }
+.foodrow { flex-wrap: nowrap; }

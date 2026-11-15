@@ -51,6 +51,8 @@ export interface AnimalData {
   adoptedAt?: number;
   /** visitante de temporada: se va al acabar su temporada */
   visitor?: string;
+  /** perro embarrado (después de la lluvia): se puede bañar */
+  muddy?: boolean;
 }
 
 export const PERSONALITIES: Record<Personality, { name: string; blurb: string }> = {
