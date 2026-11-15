@@ -84,6 +84,15 @@ export class Ambient {
   splash = new Pool(80);
   ripples = new Pool(40);
   spray = new Pool(90);
+  /** hojas que el viento arrastra por el suelo (vóxeles) */
+  tumble = new Pool(24);
+  /** gotas que saltan al chapotear en un charco (vóxeles; gy = cota) */
+  droplets = new Pool(60);
+  /** huellas en la nieve (vóxeles) */
+  prints: { x: number; y: number; z: number; t: number; paw: boolean; a: number; side: number }[] = [];
+  private lastStep = new WeakMap<object, { x: number; y: number; side: number }>();
+  /** nieve cuajada en el suelo (0..1), la pone el juego */
+  snowCover = 0;
   pigeons: Pigeon[] = [];
   clouds: { x: number; y: number; r: number; v: number }[] = [];
   puddles: { x: number; y: number; r: number; s: number }[] = [];
@@ -118,8 +127,66 @@ export class Ambient {
     }
   }
 
+  /** Algo las asusta (las campanas): todas las palomas echan a volar. */
+  scatter(): void {
+    let any = false;
+    for (const pg of this.pigeons) if (pg.state !== 'fly' && pg.state !== 'gone') {
+      pg.state = 'fly';
+      pg.t = -Math.random() * 0.4;
+      pg.flip = Math.random() < 0.5;
+      any = true;
+    }
+    if (any) this.onFlap?.();
+  }
+
   get drawables(): Drawable[] {
-    return this.pigeons.filter((p) => p.state !== 'gone');
+    const out: Drawable[] = this.pigeons.filter((p) => p.state !== 'gone');
+    if (this.prints.length && this.snowCover > 0.05) out.push(...this.trailTiles());
+    return out;
+  }
+
+  /** Huellas agrupadas por casilla: así se ordenan con el resto (las aceras de las casas son
+   *  parte del sprite de la casa y taparían una capa de suelo). */
+  private trailTiles(): Drawable[] {
+    const by = new Map<number, Ambient['prints']>();
+    for (const f of this.prints) {
+      const k = Math.floor(f.y / 16) * 4096 + Math.floor(f.x / 16);
+      let l = by.get(k);
+      if (!l) by.set(k, (l = []));
+      l.push(f);
+    }
+    const out: Drawable[] = [];
+    for (const [k, list] of by) {
+      const tx = k % 4096, ty = Math.floor(k / 4096), z = list[0].z;
+      out.push({
+        box: [tx * 16, ty * 16, z, tx * 16 + 16, ty * 16 + 16, z + 0.5],
+        rect: [2 * (tx * 16 - ty * 16 - 16) - 2, (tx + ty) * 16 - z - 2, 68, 36],
+        draw: (ctx, camX, camY) => this.drawPrints(ctx, camX, camY, list),
+      });
+    }
+    return out;
+  }
+
+  private drawPrints(ctx: CanvasRenderingContext2D, camX: number, camY: number, list: Ambient['prints']): void {
+    ctx.fillStyle = PALETTE.stone2;
+    for (const f of list) {
+      const off = f.paw ? 1.4 : 2;
+      const [sx, sy] = S(f.x + Math.cos(f.a + Math.PI / 2) * (f.side ? off : -off), f.y + Math.sin(f.a + Math.PI / 2) * (f.side ? off : -off), f.z);
+      const X = Math.round(sx - camX), Y = Math.round(sy - camY);
+      ctx.globalAlpha = Math.min(1, this.snowCover * 1.2) * Math.max(0, 1 - f.t / 45) * 0.8;
+      if (f.paw) {
+        // almohadilla y dos deditos
+        ctx.fillRect(X, Y, 2, 1);
+        ctx.fillRect(X - 1, Y - 1, 1, 1);
+        ctx.fillRect(X + 2, Y - 1, 1, 1);
+      } else {
+        // suela: óvalo pequeño
+        ctx.fillRect(X - 1, Y, 4, 1);
+        ctx.fillRect(X, Y - 1, 2, 1);
+        ctx.fillRect(X, Y + 1, 2, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   update(dt: number, hour: number, w: Weather, playerXY: [number, number], season: 'otoño' | 'invierno' | 'primavera' | 'verano'): void {
@@ -148,6 +215,32 @@ export class Ambient {
         p.y += p.vy * dt;
       }
       if (p.t > p.life) p.on = false;
+    }
+    // con viento de otoño, hojas sueltas corren por el suelo cerca de ti
+    if (season === 'otoño' && Math.abs(w.wind) > 0.4 && Math.random() < dt * 0.8 * Math.abs(w.wind)) {
+      const x = playerXY[0] + (Math.random() - 0.5) * 220, y = playerXY[1] + (Math.random() - 0.5) * 220;
+      if (this.groundAt(x, y)) this.blowLeaf(x, y, w.wind > 0 ? Math.PI * 0.25 + (Math.random() - 0.5) * 0.6 : Math.PI * 1.25 + (Math.random() - 0.5) * 0.6, 14 + Math.abs(w.wind) * 14);
+    }
+    for (const p of this.tumble.items) if (p.on) {
+      p.t += dt;
+      // a saltitos: rápido al principio y se va frenando
+      const k = Math.max(0, 1 - p.t / 2.2);
+      const hop = 0.6 + 0.4 * Math.abs(Math.sin(p.t * 7 + p.k));
+      const nx = p.x + p.vx * k * hop * dt, ny = p.y + p.vy * k * hop * dt;
+      if (this.groundAt(nx, ny)) { p.x = nx; p.y = ny; } else { p.vx = 0; p.vy = 0; }
+      if (p.t > p.life) p.on = false;
+    }
+    for (const p of this.droplets.items) if (p.on) {
+      p.t += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.t > p.life) p.on = false;
+    }
+    if (this.prints.length) {
+      for (const f of this.prints) f.t += dt;
+      // se borran con el tiempo (o al deshelar)
+      const maxT = this.snowCover > 0.3 ? 45 : 8;
+      if (this.prints[0].t > maxT) this.prints = this.prints.filter((f) => f.t <= maxT);
     }
     // mariposas de día (con buen tiempo), luciérnagas de noche
     if (day && w.rain < 0.1 && season !== 'invierno' && Math.random() < dt * 0.25) {
@@ -324,7 +417,87 @@ export class Ambient {
   }
 
   /** Charcos, salpicaduras y ondas de la fuente (capa de suelo, antes de los objetos). */
+  private groundAt(x: number, y: number): boolean {
+    const tx = Math.floor(x / 16), ty = Math.floor(y / 16);
+    if (tx < 0 || ty < 0 || tx >= this.meta.tilesW || ty >= this.meta.tilesH) return false;
+    const i = ty * this.meta.tilesW + tx;
+    return !!this.meta.walk[i];
+  }
+
+  private heightAt(x: number, y: number): number {
+    const tx = Math.floor(x / 16), ty = Math.floor(y / 16);
+    return this.meta.height[ty * this.meta.tilesW + tx] ?? 40;
+  }
+
+  /** Una hoja que sale rodando por el suelo en la dirección a (radianes). */
+  blowLeaf(x: number, y: number, a: number, speed = 26): void {
+    const p = this.tumble.spawn();
+    if (!p) return;
+    p.x = x;
+    p.y = y;
+    p.vx = Math.cos(a) * speed;
+    p.vy = Math.sin(a) * speed;
+    p.k = Math.floor(Math.random() * 4);
+    p.life = 4 + Math.random() * 2;
+    p.gy = this.heightAt(x, y);
+  }
+
+  /** Chapoteo: gotitas que saltan alrededor de (x, y). */
+  splashAt(x: number, y: number): void {
+    const z = this.heightAt(x, y);
+    for (let i = 0; i < 3; i++) {
+      const p = this.droplets.spawn();
+      if (!p) return;
+      const a = Math.random() * Math.PI * 2;
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(a) * (8 + Math.random() * 10);
+      p.vy = Math.sin(a) * (8 + Math.random() * 10);
+      p.gy = z;
+      p.life = 0.35 + Math.random() * 0.15;
+    }
+  }
+
+  /** ¿Hay un charco bajo (x, y)? (con lluvia) */
+  inPuddle(x: number, y: number): boolean {
+    for (const p of this.puddles) if (Math.hypot((x - p.x) * 0.5, y - p.y) < p.r * 0.9 || Math.hypot(x - p.x, y - p.y) < p.r * 0.7) return true;
+    return false;
+  }
+
+  /** Va dejando huellas en la nieve detrás de quien camina (una cada pocos píxeles). */
+  track(who: object, x: number, y: number, z: number, paw: boolean, stride: number): void {
+    const last = this.lastStep.get(who);
+    if (!last) {
+      this.lastStep.set(who, { x, y, side: 0 });
+      return;
+    }
+    const d = Math.hypot(x - last.x, y - last.y);
+    if (d > 40) {
+      // teletransporte (cambio de zona): no dejar rastro
+      last.x = x; last.y = y;
+      return;
+    }
+    if (d < stride) return;
+    if (this.snowCover > 0.3) {
+      this.prints.push({ x, y, z, t: 0, paw, a: Math.atan2(y - last.y, x - last.x), side: last.side });
+      if (this.prints.length > 260) this.prints.shift();
+    }
+    last.x = x;
+    last.y = y;
+    last.side ^= 1;
+  }
+
   drawGround(ctx: CanvasRenderingContext2D, camX: number, camY: number, w: Weather, sky: [number, number, number], night = 0): void {
+    // hojas que corren por el suelo
+    for (const p of this.tumble.items) if (p.on) {
+      const [sx, sy] = S(p.x, p.y, p.gy);
+      const fade = p.t > p.life - 1 ? p.life - p.t : 1;
+      ctx.globalAlpha = Math.max(0, fade);
+      const spin = p.t < 2.2 ? Math.floor(p.t * 6) : 0;
+      const img = leaf(p.k + spin, 'autumn');
+      ctx.drawImage(img, Math.round(sx - camX - img.width / 2), Math.round(sy - camY - img.height));
+    }
+    ctx.globalAlpha = 1;
     // sombras de nubes (solo con sol)
     if (w.rain < 0.1 && w.overcast < 0.4) {
       ctx.globalCompositeOperation = 'multiply';
@@ -391,6 +564,13 @@ export class Ambient {
 
   /** Chorros de la fuente, humo, vapor, hojas, mariposas (encima de la escena). */
   drawAir(ctx: CanvasRenderingContext2D, camX: number, camY: number): void {
+    // gotas del chapoteo: parábola corta
+    ctx.fillStyle = PALETTE.water4;
+    for (const p of this.droplets.items) if (p.on) {
+      const k = p.t / p.life;
+      const [sx, sy] = S(p.x, p.y, p.gy + 7 * 4 * k * (1 - k));
+      ctx.fillRect(Math.round(sx - camX), Math.round(sy - camY), 1, 1);
+    }
     // chorros: parábola desde el caño
     ctx.fillStyle = PALETTE.water4;
     for (const p of this.spray.items) if (p.on) {

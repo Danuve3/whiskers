@@ -150,6 +150,10 @@ export class Player implements Drawable {
   actionT = 0;
   box: Box = [0, 0, 0, 0, 0, 0];
   rect: [number, number, number, number] = [0, 0, 0, 0];
+  /** opacidad (vecinos que entran en una tienda) */
+  alpha = 1;
+  /** corre en los trayectos largos (la gente del barrio va siempre a su paso) */
+  hurry = true;
 
   private ver = 0;
   constructor(tx: number, ty: number, g: Grid, outfit: Outfit) {
@@ -168,7 +172,7 @@ export class Player implements Drawable {
   update(dt: number, g: Grid, rain: boolean): void {
     // en trayectos largos corre; al acercarse al destino vuelve a pasear
     const left = this.m.path.length;
-    const target = left > 6 ? 82 : left > 3 && this.m.speed > 60 ? 64 : 46;
+    const target = !this.hurry ? 40 : left > 6 ? 82 : left > 3 && this.m.speed > 60 ? 64 : 46;
     this.m.speed += (target - this.m.speed) * Math.min(1, dt * 5);
     this.m.update(dt, g);
     if (this.outfit.rain !== rain) {
@@ -191,7 +195,9 @@ export class Player implements Drawable {
     const f = this.anim.frame;
     if (!f) return;
     const sx = Math.round(2 * (this.m.x - this.m.y) - camX), sy = Math.round(this.m.x + this.m.y - this.m.z - camY);
+    if (this.alpha < 1) ctx.globalAlpha = Math.max(0, this.alpha);
     ctx.drawImage(f.canvas, sx - f.ox, sy - f.oy);
+    ctx.globalAlpha = 1;
     this.rect = [sx - f.ox + camX, sy - f.oy + camY, f.canvas.width, f.canvas.height];
   }
 

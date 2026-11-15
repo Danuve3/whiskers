@@ -232,3 +232,41 @@ export function ui(kind: 'tap' | 'open' | 'close' | 'nope' = 'tap'): void {
     ding(t + 0.08, 67, 0.05);
   }
 }
+
+/** Campana de iglesia: parciales inarmónicos (hum, prima, tercera menor, quinta, nominal) con cola larga. */
+function bell(t: number, midi: number, vel: number): void {
+  const ctx = audio.ctx!;
+  const f = mtof(midi);
+  const out = ctx.createGain();
+  out.gain.value = vel;
+  out.connect(audio.amb);
+  out.connect(audio.reverbSend);
+  for (const [k, a, d] of [[0.5, 0.5, 4.5], [1, 0.8, 3.2], [1.19, 0.45, 2.4], [1.5, 0.3, 2], [2, 0.55, 1.8], [2.51, 0.2, 1.1], [3.01, 0.14, 0.8]] as const) {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f * k * (1 + (Math.random() - 0.5) * 0.002);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(a, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + d + 0.05);
+  }
+  burst(t, 2400, 2, 0.04, vel * 0.25);
+}
+
+/** Campanas de la iglesia a lo lejos: «din-don» alternando dos campanas. vol según la cercanía. */
+export function bells(strokes = 6, vol = 0.3): void {
+  if (!ok()) return;
+  const t = audio.now + 0.05;
+  for (let i = 0; i < strokes; i++) bell(t + i * 1.15, i % 2 ? 55 : 59, vol * (i % 2 ? 0.9 : 1));
+}
+
+/** Chapoteo en un charco. */
+export function splash(): void {
+  if (!ok()) return;
+  const t = audio.now;
+  burst(t, 900 + Math.random() * 400, 1.5, 0.12, 0.18);
+  burst(t + 0.05, 1800 + Math.random() * 600, 2, 0.08, 0.1);
+}

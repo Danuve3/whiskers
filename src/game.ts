@@ -30,6 +30,7 @@ import { isFeeder, SERVINGS } from './sim/feeders.ts';
 import type { MomentId } from './sim/life.ts';
 import type { HappeningId } from './sim/rhythm.ts';
 import { whereIs, type ScheduleSlot } from './sim/neighbors.ts';
+import { Townsfolk, folkScene } from './world/folk.ts';
 import { makeLook } from './sprites/breeds.ts';
 import { pickTreasure, VISITORS, visitorData, type TreasureDef, type WorldNow } from './sim/collect.ts';
 import { generateAnimal, comfortDistance, species, hearts, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
@@ -117,6 +118,10 @@ export class Game {
   /** vecinos presentes: siguen su horario por el barrio (y Lúa pasea a su galga) */
   npcs: { nb: Neighbor; ent: Player; slot: ScheduleSlot | null; leaving: boolean; t: number; pet: number; dog?: Animal; dogT: number }[] = [];
   private npcT = 0;
+  /** gente sin nombre según la hora (cola de la panadería, tertulia del bar) */
+  folk = new Townsfolk();
+  private bellHour = -1;
+  private splashT = 0;
   /** decoración colocada en esta zona (dibujable) */
   decor: (Drawable & { id: string; tx: number; ty: number; ref: { id: string; zone: string; fill?: number; tx: number; ty: number } })[] = [];
   /** comedero que se va a rellenar al llegar a su lado */
@@ -625,6 +630,10 @@ export class Game {
       },
       friends: (a, b) => this.events.friends?.(a, b),
       moment: (id, e) => this.pendingMoments.push({ id, e, t: 6 }),
+      pounce: (e, a, what) => {
+        // con viento, una hoja sale rodando justo hacia donde salta el gato
+        if (what === 'hojas') this.ambient?.blowLeaf(e.ent.m.x + Math.cos(a) * 8, e.ent.m.y + Math.sin(a) * 8, a, 22);
+      },
     });
     this.pop.setSpots(this.namedSpots());
     this.treasures = [];
@@ -640,6 +649,15 @@ export class Game {
     this.ambient = new Ambient(m, this.bounds);
     this.ambient.sea = this.zoneDef.sea ?? null;
     this.ambient.onFlap = () => sfx.flap();
+    this.pop.puddles = this.ambient.puddles;
+    this.folk.populate(this.grid, folkScene(this.zoneId, this.hour));
+    if (this.zoneId === 'puerto') {
+      // el bar del puerto: luz cálida en la puerta y en la acera de noche
+      const L = (x: number, y: number, z: number, r: number, kind: LightSrc['kind']) =>
+        this.lights.push({ sx: 2 * (x - y), sy: x + y - z, gx: 2 * (x - y), gy: x + y - 40, r, kind, phase: this.lights.length });
+      L(136, 52, 84, 34, 'kiosk');
+      L(136, 70, 40, 44, 'window');
+    }
     this.fest = new Festivities(this.zoneId === 'plaza' ? this.fiestas : this.fiestas.filter((f) => f === 'navidad' || f === 'entroido'), m);
     for (const l of this.fest.lights) this.lights.push(l);
     const [fx, fy] = this.player.feet();
@@ -1332,6 +1350,7 @@ export class Game {
       }
     }
     this.updateNpcs(dt);
+    this.folk.update(dt, this.grid, folkScene(this.zoneId, this.hour), this.zoneDef.entry, this.weather.rain > 0.3);
     // paseo hasta la fuente (para las misiones)
     const fo = this.zone.meta.fountains[0];
     this.fountainT -= dt;
@@ -1375,12 +1394,56 @@ export class Game {
     this.cam.y = clampAxis(this.cam.y, y0 + this.view.h / 2, y1 - this.view.h / 2 - 8);
     this.grade = weatherGrade(gradeAt(this.hour), this.weather.rain, this.weather.fog, this.weather.overcast);
     this.ambient.update(dt, this.hour, this.weather, [this.player.m.x, this.player.m.y], this.season);
+    this.ambient.snowCover = this.snowCover;
+    this.worldLife(dt);
     if (this.marker) {
       // se queda mientras se camina hacia él y se desvanece al llegar
       const pm = this.player.m;
       if (!pm.moving || this.pending) this.marker.t -= dt;
       if (this.marker.t <= 0) this.marker = null;
     }
+  }
+
+  /** Vida por horas y huellas del clima: campanas, huellas en la nieve y chapoteos. */
+  private worldLife(dt: number): void {
+    const hh = Math.floor(this.hour);
+    if (this.bellHour !== hh) {
+      if (this.bellHour >= 0 && (hh === 12 || hh === 20) && !this.titleDrift) this.ringBells(hh === 12 ? 6 : 3);
+      this.bellHour = hh;
+    }
+    if (this.snowCover > 0.3) {
+      const P = this.player.m;
+      this.ambient.track(this.player, P.x, P.y, P.z, false, 5);
+      for (const n of this.npcs) this.ambient.track(n.ent, n.ent.m.x, n.ent.m.y, n.ent.m.z, false, 5);
+      for (const f of this.folk.ents) this.ambient.track(f, f.m.x, f.m.y, f.m.z, false, 5);
+      for (const a of this.animals) this.ambient.track(a, a.m.x, a.m.y, a.m.z, true, a.look.shape.legH > 12 ? 6 : 4);
+    }
+    if (this.weather.rain > 0.1) {
+      this.splashT -= dt;
+      if (this.splashT <= 0) {
+        this.splashT = 0.12;
+        let loud = false;
+        for (const e of this.pop.entries) {
+          const A = e.ent;
+          const jumping = e.brain.mode === 'spin' && e.brain.moment === 'charco';
+          if ((A.m.moving || jumping) && this.ambient.inPuddle(A.m.x, A.m.y)) {
+            this.ambient.splashAt(A.m.x, A.m.y);
+            if (jumping) loud = true;
+          }
+        }
+        const P = this.player.m;
+        if (P.moving && this.ambient.inPuddle(P.x, P.y)) this.ambient.splashAt(P.x, P.y);
+        if (loud && Math.random() < 0.35) sfx.splash();
+      }
+    }
+  }
+
+  /** Las campanas de la iglesia: se oyen más en la plaza; las palomas se espantan. */
+  ringBells(strokes = 6): void {
+    const vol = this.zoneId === 'plaza' ? 0.3 : this.zoneId === 'calle' || this.zoneId === 'mercado' ? 0.16 : 0.09;
+    sfx.bells(strokes, vol);
+    if (this.zoneId === 'plaza') this.ambient.scatter();
+    for (const e of this.pop.entries) if (e.brain.mode !== 'sleep' && Math.random() < 0.6) e.ent.react('alert', 1.2);
   }
 
   render(dt: number): void {
@@ -1465,7 +1528,7 @@ export class Game {
     }
     // sombras de contacto (dos tonos, multiplicando)
     b.globalCompositeOperation = 'multiply';
-    for (const e of [this.player, ...this.npcs.map((n) => n.ent), ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])), ...this.animals]) {
+    for (const e of [this.player, ...this.npcs.map((n) => n.ent), ...this.folk.ents, ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])), ...this.animals]) {
       const [sx, sy] = 'feet' in e ? e.feet() : e.screenPos();
       const big = e instanceof Animal ? (e.look.shape.legH > 15 ? 11 : 8) : 8;
       b.drawImage(pixelEllipse(big, Math.ceil(big / 2.5), '#b9b1cf'), Math.round(sx - camX - big), Math.round(sy - camY - Math.ceil(big / 2.5)));
@@ -1560,7 +1623,7 @@ export class Game {
         { box: [BX.x - 8, BX.y + 7, BX.z, BX.x + 8, BX.y + 8, BX.z + 10], rect: [bsx - 15, bsy - 11, 31, 26], draw: (ctx, cx, cy) => ctx.drawImage(front, Math.round(bsx - 15 - cx), Math.round(bsy - 11 - cy)) },
       );
     }
-    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.structures, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent), ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])));
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.structures, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent), ...this.folk.ents, ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])));
     for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes

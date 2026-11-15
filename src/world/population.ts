@@ -35,6 +35,10 @@ export interface Brain {
   /** ya ha adoptado la postura del modo actual */
   posed?: boolean;
   spinStep?: number;
+  /** al llegar a donde iba, hace esto (chapotear en el charco) */
+  then?: 'charco';
+  /** dirección del salto al cazar (radianes, en el plano del suelo) */
+  pounceA?: number;
   /** casilla de un tesoro que te está enseñando */
   point?: [number, number];
   /** al comer, se acerca hasta tener la boca sobre la comida */
@@ -163,6 +167,8 @@ export interface PopulationEvents {
   friends?(a: Entry, b: Entry): void;
   /** empieza un momento raro (el juego decide si se ha visto) */
   moment?(id: MomentId, e: Entry): void;
+  /** un gato se agazapa para saltar sobre algo (hoja, mariposa) en la dirección a */
+  pounce?(e: Entry, a: number, what: MomentId): void;
 }
 
 const tdist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by) / TILE;
@@ -170,6 +176,8 @@ const tdist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax 
 export class Population {
   entries: Entry[] = [];
   bowls: Bowl[] = [];
+  /** charcos de la zona (vóxeles): con lluvia, los perros van a chapotear */
+  puddles: { x: number; y: number }[] = [];
   /** comederos, bebederos, mantas y casetas colocados */
   feeders: { id: string; x: number; y: number; ref?: PlacedFeeder }[] = [];
 
@@ -240,6 +248,25 @@ export class Population {
     const m = e.brain.mode;
     return m === 'eat' || m === 'goBowl' || m === 'care' || m === 'feeder' || m === 'flee' || m === 'sock' || m === 'ask' || m === 'social' || m === 'trick' || m === 'spin' || m === 'box' || m === 'pounce' || e.ent.m.moving;
   }
+  /** Ir al charco más cercano (si hay alguno a mano) para chapotear al llegar. */
+  private toPuddle(e: Entry, speed: number): boolean {
+    const A = e.ent;
+    let best: { x: number; y: number } | null = null, bd = 9;
+    for (const p of this.puddles) {
+      const d = tdist(A.m.x, A.m.y, p.x, p.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (!best) return false;
+    if (bd <= 0.7) {
+      this.spin(e, 3.2, 'charco');
+      return true;
+    }
+    if (!this.go(e, best.x / TILE - 0.5, best.y / TILE - 0.5, speed)) return false;
+    e.brain.mode = 'walk';
+    e.brain.then = 'charco';
+    return true;
+  }
+
   /** Dar vueltas en el sitio (persiguiendo la cola, un truco, chapotear…). */
   private spin(e: Entry, seconds: number, moment?: MomentId): void {
     e.ent.m.stop();
@@ -409,8 +436,18 @@ export class Population {
       B.posed = false;
       B.moment = undefined;
       B.target = undefined;
+      B.pounceA = undefined;
       A.inPlace = false;
     };
+    if (B.then) {
+      if (B.mode !== 'walk') B.then = undefined;
+      else if (!A.m.moving) {
+        const m = B.then;
+        B.then = undefined;
+        this.spin(e, 3.2, m);
+        return true;
+      }
+    }
     switch (B.mode) {
       case 'spin': {
         if (B.t <= 0) {
@@ -461,7 +498,7 @@ export class Population {
       case 'pounce':
         if (!B.posed && B.t < 1.1) {
           B.posed = true;
-          const a = A.m.dir * (Math.PI / 2) + (Math.random() - 0.5);
+          const a = B.pounceA ?? A.m.dir * (Math.PI / 2) + (Math.random() - 0.5);
           this.go(e, A.m.x / TILE - 0.5 + Math.cos(a) * 2, A.m.y / TILE - 0.5 + Math.sin(a) * 2, sp.run);
         }
         if (B.t <= 0 && !A.m.moving) {
@@ -779,7 +816,8 @@ export class Population {
       A.play('stretch');
       return;
     }
-    // --- lluvia: a cubierto
+    // --- lluvia: algún perro juguetón prefiere los charcos; los demás, a cubierto
+    if (w.raining && species(D) === 'dog' && D.personality !== 'dormilon' && Math.random() < 0.2 && this.toPuddle(e, sp.trot)) return;
     if (w.raining && w.shelters.length) {
       let best: [number, number] | null = null, bd = Infinity;
       for (const s of w.shelters) {
@@ -858,6 +896,7 @@ export class Population {
       return;
     }
     if (!cat && Math.random() < (w.raining ? 0.12 : 0.03)) {
+      if (w.raining && this.toPuddle(e, sp.trot)) return;
       this.spin(e, 2.6, w.raining ? 'charco' : 'cola');
       return;
     }
@@ -866,6 +905,8 @@ export class Population {
       B.t = 2.2;
       B.posed = false;
       B.moment = Math.abs(w.wind) > 0.5 && w.season === 'otoño' ? 'hojas' : 'mariposa';
+      B.pounceA = A.m.dir * (Math.PI / 2) + (Math.random() - 0.5);
+      this.ev.pounce?.(e, B.pounceA, B.moment);
       A.play('idle');
       A.react('alert', 0.9);
       this.ev.moment?.(B.moment, e);
