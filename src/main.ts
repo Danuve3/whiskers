@@ -18,6 +18,8 @@ import { openWelcome, openFishing } from './ui/extras.ts';
 import { showTitle } from './ui/title.ts';
 import { Tutorial } from './ui/tutorial.ts';
 import { applyOffline } from './sim/offline.ts';
+import { feedFromFeeders } from './sim/feeders.ts';
+import { syncReminderState } from './reminder.ts';
 import { iconImg } from './ui/kit.ts';
 import { ExitSigns, RecenterButton, openMap } from './ui/nav.ts';
 import { AnimalStrip, startHints, markUsed, needyByZone } from './ui/assist.ts';
@@ -37,6 +39,10 @@ const persist = () => {
   const g = (window as unknown as { __game?: Game }).__game;
   if (g?.grid && !shot) (save.world as unknown as WorldState).meta.pos = [g.player.m.tx, g.player.m.ty];
   store(save);
+  // para el recordatorio diario: el animal que más te quiere es quien «te echa de menos»
+  const ws = save.world as unknown as WorldState;
+  const fav = [...(ws.animals ?? [])].sort((a, b) => b.trust - a.trust)[0];
+  if (!shot) syncReminderState(!!save.settings.reminder, save.lastSeen, fav?.name ?? 'Nemesio');
 };
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -234,6 +240,8 @@ void (async () => {
     const h = (now - lastDecay) / 3_600_000;
     lastDecay = now;
     for (const a of W.animals) decay(a, h, now);
+    // los de otras zonas comen solos de sus comederos
+    feedFromFeeders(W.animals, W.meta.placed ?? [], game.zoneId);
   }, 5000);
   setInterval(() => {
     const e = game.maybeArrival(Date.now());
@@ -262,7 +270,7 @@ void (async () => {
   const now0 = Date.now();
   const openZones = (W.meta.zonesOpen ?? ['calle']) as ZoneId[];
   const free = openZones.reduce((a, z) => a + Math.max(0, ZONES[z].cap - W.animals.filter((x) => x.zone === z).length), 0);
-  const rep = shot ? null : applyOffline(W.animals, save.lastSeen, now0, free);
+  const rep = shot ? null : applyOffline(W.animals, save.lastSeen, now0, free, W.meta.placed ?? []);
   const arrivals: string[] = [];
   if (rep && rep.hours >= 0.25) {
     for (let i = 0; i < rep.arrivals; i++) {
@@ -273,7 +281,7 @@ void (async () => {
       arrivals.push(W.animals[W.animals.length - 1].name);
     }
     const gifts = giftTick(host, now0, PORTAL, rep.hours * 60);
-    if (save.characterDone) pendingWelcome = () => openWelcome({ hours: rep.hours, arrivals, gifts, missed: rep.missed });
+    if (save.characterDone) pendingWelcome = () => openWelcome({ hours: rep.hours, arrivals, gifts, missed: rep.missed, served: rep.served });
   }
   game.start();
   evaluate(host);

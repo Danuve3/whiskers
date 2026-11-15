@@ -26,6 +26,7 @@ import { NEIGHBORS, GIFTS, type Neighbor } from './sim/progress.ts';
 import { matrix } from './fx/sprites.ts';
 import type { Outfit } from './sprites/player.ts';
 import { Population, bowlDistance, type Entry } from './world/population.ts';
+import { isFeeder, SERVINGS } from './sim/feeders.ts';
 import { generateAnimal, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
 export interface WorldState {
@@ -101,7 +102,9 @@ export class Game {
   pending: { e: Entry; act: Action; food: FoodId; repath: number } | null = null;
   npcs: { nb: Neighbor; ent: Player }[] = [];
   /** decoración colocada en esta zona (dibujable) */
-  decor: (Drawable & { id: string; tx: number; ty: number })[] = [];
+  decor: (Drawable & { id: string; tx: number; ty: number; ref: { id: string; zone: string; fill?: number; tx: number; ty: number } })[] = [];
+  /** comedero que se va a rellenar al llegar a su lado */
+  private refill: { id: string; zone: string; fill?: number; tx: number; ty: number } | null = null;
   /** juego del puntero láser */
   laser: { e: Entry; x: number; y: number; t: number; think: number } | null = null;
   private fountainT = 0;
@@ -368,10 +371,25 @@ export class Game {
       const sx = 2 * (x - y), sy = x + y - z;
       this.decor.push({
         id: d.id, tx: d.tx, ty: d.ty, box: [x - 6, y - 6, z, x + 6, y + 6, z + 10], rect: [sx - img.width / 2, sy - img.height, img.width, img.height],
-        draw: (ctx, cx, cy) => ctx.drawImage(img, Math.round(sx - img.width / 2 - cx), Math.round(sy - img.height + 2 - cy)),
+        draw: (ctx, cx, cy) => {
+          const X = Math.round(sx - img.width / 2 - cx), Y = Math.round(sy - img.height + 2 - cy);
+          ctx.drawImage(img, X, Y);
+          if (!isFeeder(d.id)) return;
+          // reserva: 4 pastillas (2 raciones cada una); parpadea cuando está vacío
+          const fill = d.fill ?? 1, n = Math.ceil(fill * 4 - 1e-6);
+          const px = Math.round(sx - cx) - 6, py = Y - 5;
+          if (fill <= 0 && Math.floor(performance.now() / 500) % 2) return;
+          ctx.fillStyle = PALETTE.ink2;
+          ctx.fillRect(px, py, 13, 4);
+          for (let i = 0; i < 4; i++) {
+            ctx.fillStyle = i < n ? (d.id === 'comedero' ? PALETTE.mustard : PALETTE.sky) : PALETTE.stone1;
+            ctx.fillRect(px + 1 + i * 3, py + 1, 2, 2);
+          }
+        },
+        ref: d,
       });
     }
-    this.pop.feeders = placed.map((d) => ({ id: d.id, x: d.tx * TILE + 8, y: d.ty * TILE + 8 }));
+    this.pop.feeders = placed.map((d) => ({ id: d.id, x: d.tx * TILE + 8, y: d.ty * TILE + 8, ref: d }));
   }
 
   /** Coloca decoración delante del jugador. */
@@ -630,6 +648,21 @@ export class Game {
         return;
       }
     }
+    // comederos y bebederos: ir a rellenarlos
+    for (const d of this.decor) {
+      if (!isFeeder(d.id)) continue;
+      const [x, y, w, h] = d.rect ?? [0, 0, 0, 0];
+      if (wx >= x - 4 && wx <= x + w + 4 && wy >= y - 8 && wy <= y + h + 3) {
+        this.pending = null;
+        this.refill = d.ref;
+        const t = nearestWalkable(this.grid, d.tx, d.ty);
+        if (t && this.walkTo(t[0], t[1])) {
+          this.cam.follow = true;
+          this.marker = { x: t[0] * TILE + 8, y: t[1] * TILE + 8, t: 0.8 };
+        }
+        return;
+      }
+    }
     // animales: zona de toque generosa (elipse alrededor del cuerpo, nunca menor que un dedo)
     // y, si hay varios, el más cercano al dedo y luego el más cercano a la cámara
     const finger = 10 * this.view.dpr / this.view.zoom; // ~10 px CSS de margen extra
@@ -707,6 +740,23 @@ export class Game {
     });
     this.handlePending(dt);
     this.updateStepBack(dt);
+    if (this.refill && !this.player.m.moving) {
+      const R = this.refill, pm = this.player.m;
+      this.refill = null;
+      if (Math.hypot(pm.x - (R.tx * TILE + 8), pm.y - (R.ty * TILE + 8)) / TILE < 2) {
+        pm.dir = dirTo(pm.x, pm.y, R.tx * TILE + 8, R.ty * TILE + 8, pm.dir);
+        const what = R.id === 'comedero' ? 'comedero' : 'bebedero';
+        if ((R.fill ?? 1) >= 0.999) this.events.toast(`El ${what} ya está lleno.`);
+        else {
+          R.fill = 1;
+          this.player.action = 'give';
+          this.player.actionT = 1.1;
+          if (R.id === 'comedero') sfx.kibble();
+          else sfx.pour();
+          this.events.toast(`Rellenas el ${what}: ${SERVINGS} raciones para quien lo necesite.`);
+        }
+      }
+    }
     for (const f of this.floaters) f.t += dt;
     this.floaters = this.floaters.filter((f) => f.t < 1.6);
     if (!this.opts.shot) {

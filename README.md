@@ -17,9 +17,19 @@ después de la primera visita).
 | Pellizcar | Rueda | Zoom en niveles enteros |
 | Tocar a un vecino | Clic | Hablar y ver su encargo |
 | Tocar un regalo en el portal | Clic | Guardarlo en la vitrina |
+| Tocar un cartel de salida | Clic | Ir andando a esa zona (las cerradas dicen cómo abrirlas) |
+| Tocar un comedero o bebedero | Clic | Rellenarlo (8 raciones) |
+| Deslizar una hoja hacia abajo | — | Cerrarla |
+| Botón «atrás» de Android | Retroceso del navegador | Cerrar la hoja o el menú abierto |
 
-Barra inferior: álbum, logros, misiones, armario, decoración y ajustes (mezclador de audio,
-silencio y exportar/importar partida).
+- Arriba a la izquierda, la hora y el tiempo; debajo, la pestaña con los animales de la zona
+  (retrato, barras y lo que necesitan; tocar uno lleva hasta él).
+- Arriba a la derecha, el mapa del barrio: zonas abiertas, qué falta para abrir las demás, avisos de
+  animales que necesitan algo y viaje directo.
+- Sobre los animales, bocadillos de necesidad (cuenco, gota o tirita) y «+♥» al ganar confianza.
+- Si mueves la cámara, un botón (o esperar unos segundos) la devuelve al personaje.
+- Barra inferior: álbum, logros, misiones, armario, decoración y ajustes (mezclador de audio,
+  silencio, vibración, recordatorio diario y exportar/importar partida).
 
 ## Cómo se juega
 
@@ -39,8 +49,11 @@ silencio y exportar/importar partida).
 - **Sin moneda:** todo se desbloquea con logros (infinitos y algunos secretos), misiones
   diarias y semanales, encargos de los vecinos y la confianza acumulada.
 - **Progreso offline:** al volver (con tope de 48 h) llegan animales nuevos, hay regalos en
-  el portal y las necesidades han bajado un poco. Te lo cuenta la pantalla «Mientras no
-  estabas…».
+  el portal y las necesidades han bajado un poco. Los comederos y bebederos que hayas colocado
+  siguen sirviendo raciones mientras no estás. Te lo cuenta la pantalla «Mientras no
+  estabas…», y vuelves a la misma zona y casilla en la que lo dejaste.
+- **Recordatorio diario (opcional):** si pasa casi un día sin jugar, una notificación suave.
+  Funciona en Chrome para Android con Whiskers instalada (Periodic Background Sync).
 
 ## Desarrollo
 

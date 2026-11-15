@@ -15,7 +15,7 @@ export interface MetaState {
   eventsSeen: string[];
   lastGiftCheck: number;
   /** decoración colocada en el barrio */
-  placed?: { id: string; zone: string; tx: number; ty: number; t: number }[];
+  placed?: { id: string; zone: string; tx: number; ty: number; t: number; fill?: number }[];
   /** zonas abiertas (para avisar al abrirse) */
   zonesOpen?: string[];
   /** zona en la que estaba el jugador */

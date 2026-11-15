@@ -41,6 +41,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: '/whiskers/index.html',
+        // recordatorio diario opcional (Periodic Background Sync)
+        importScripts: ['reminder-sw.js'],
       },
       devOptions: { enabled: false },
     }),

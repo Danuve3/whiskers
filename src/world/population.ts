@@ -4,6 +4,7 @@ import { findPath, nearestWalkable, walkable, type Grid } from './path.ts';
 import { Animal, dirFromDelta, type Drawable } from './entities.ts';
 import { makeLook } from '../sprites/breeds.ts';
 import { warmAnimal } from '../sprites/workerClient.ts';
+import { serve, SERVINGS, type PlacedFeeder } from '../sim/feeders.ts';
 import { apply, comfortDistance, hearts, species, stage, type Action, type ActionResult, type AnimalData, type FoodId } from '../sim/model.ts';
 import { matrix } from '../fx/sprites.ts';
 import * as sfx from '../audio/sfx.ts';
@@ -78,7 +79,7 @@ export class Population {
   entries: Entry[] = [];
   bowls: Bowl[] = [];
   /** comederos, bebederos, mantas y casetas colocados */
-  feeders: { id: string; x: number; y: number }[] = [];
+  feeders: { id: string; x: number; y: number; ref?: PlacedFeeder }[] = [];
 
   constructor(private grid: Grid, private ev: PopulationEvents) {}
 
@@ -212,10 +213,10 @@ export class Population {
     if (B.mode === 'feeder') {
       if (!A.m.moving && B.t > 0) return;
       if (!A.m.moving && B.t <= 0) {
-        const f = B.feederId === 'bebedero';
-        if (f) D.thirst = Math.min(1, D.thirst + 0.4);
-        else D.hunger = Math.min(1, D.hunger + 0.4);
-        D.wellbeing = Math.min(1, D.wellbeing + 0.05);
+        // gasta una ración del comedero (o bebedero) más cercano de ese tipo
+        const near = this.feeders.filter((x) => x.id === B.feederId).sort((a, b) => tdist(A.m.x, A.m.y, a.x, a.y) - tdist(A.m.x, A.m.y, b.x, b.y))[0];
+        if (near?.ref) serve(near.ref, D);
+        else if (near) serve({ id: near.id, zone: D.zone }, D);
         B.mode = 'idle';
         B.think = 2;
         return;
@@ -224,7 +225,7 @@ export class Population {
     }
     if (B.think <= 0 && !A.m.moving && this.awake(e, w.hour)) {
       const need: string | null = D.hunger < 0.45 ? 'comedero' : D.thirst < 0.45 ? 'bebedero' : null;
-      const f = need ? this.feeders.find((x) => x.id === need) : null;
+      const f = need ? this.feeders.find((x) => x.id === need && (x.ref?.fill ?? 1) >= 1 / SERVINGS - 1e-6) : null;
       if (f && pd > comfort * 0.6) {
         if (this.go(e, f.x / TILE - 0.5, f.y / TILE - 0.5, sp.walk) || tdist(A.m.x, A.m.y, f.x, f.y) < 1.5) {
           B.mode = 'feeder';

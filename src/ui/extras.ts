@@ -25,6 +25,7 @@ export interface Welcome {
   arrivals: string[];
   gifts: number;
   missed: string[];
+  served?: number;
 }
 
 export function openWelcome(w: Welcome): void {
@@ -61,7 +62,8 @@ export function openWelcome(w: Welcome): void {
   if (w.arrivals.length) lines.push(`Han llegado caras nuevas: ${w.arrivals.join(', ')}.`);
   if (w.gifts) lines.push(`Hay ${w.gifts} ${w.gifts === 1 ? 'regalo' : 'regalos'} esperándote en el portal.`);
   if (w.missed.length) lines.push(`${w.missed.join(' y ')} ${w.missed.length === 1 ? 'te ha' : 'te han'} echado de menos.`);
-  lines.push('Tienen un poquito de hambre y de sed, nada grave.');
+  if (w.served) lines.push(`Tus comederos y bebederos han servido ${w.served} ${w.served === 1 ? 'ración' : 'raciones'}.`);
+  lines.push(w.served ? 'Algunos tienen un poquito de hambre o de sed, nada grave.' : 'Tienen un poquito de hambre y de sed, nada grave.');
   sheet.body.append(c, ...lines.map((l) => el('p', { class: 'wl' }, l)), el('div', { class: 'footer' }, button('¡Vamos!', () => void sheet.close(), 'primary')));
   sheet.open();
 }
