@@ -132,6 +132,7 @@ game.events = {
     }
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     bump(host, key);
+    if (res.trustGain > 0 || res.heartUp) game.floatTrust(e, res.heartUp);
     if (act === 'feed') tuto?.event('fed');
     // estadísticas de contexto (para logros y misiones)
     const h = new Date().getHours();

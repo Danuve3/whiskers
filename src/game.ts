@@ -10,7 +10,7 @@ import { gradeAt, weatherGrade, type Grade } from './fx/daylight.ts';
 import { Lighting, type LightSrc } from './fx/lighting.ts';
 import { Ambient, type Weather } from './fx/ambient.ts';
 import { pixelEllipse, rgb } from './fx/pixel.ts';
-import { heart, alert, zzz, note } from './fx/sprites.ts';
+import { heart, alert, zzz, note, needBubble } from './fx/sprites.ts';
 import { PALETTE } from './gfx/palette.ts';
 import * as sfx from './audio/sfx.ts';
 import { music, moodFor } from './audio/music.ts';
@@ -25,8 +25,8 @@ import { newMeta, type MetaState } from './meta/controller.ts';
 import { NEIGHBORS, GIFTS, type Neighbor } from './sim/progress.ts';
 import { matrix } from './fx/sprites.ts';
 import type { Outfit } from './sprites/player.ts';
-import { Population, type Entry } from './world/population.ts';
-import { generateAnimal, hearts, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
+import { Population, bowlDistance, type Entry } from './world/population.ts';
+import { generateAnimal, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
 export interface WorldState {
   animals: AnimalData[];
@@ -113,9 +113,17 @@ export class Game {
   ambient!: Ambient;
   lighting = new Lighting();
   cam = { x: 0, y: 0, follow: true };
+  /** «+♥» que sube sobre un animal al ganar confianza */
+  private floaters: { x: number; y: number; z: number; t: number; big: boolean }[] = [];
   /** Animal en el que se centra la cámara mientras su menú está abierto. */
   private focus: { e: Entry; prevFollow: boolean } | null = null;
   bounds: [number, number, number, number] = [0, 0, 0, 0];
+  /** Corazoncito que sube sobre el animal al ganar confianza (más grande si gana un corazón entero). */
+  floatTrust(e: Entry, heartUp: boolean): void {
+    const m = e.ent.m;
+    this.floaters.push({ x: m.x, y: m.y, z: m.z + e.ent.look.shape.legH * 2.3 + 8, t: 0, big: heartUp });
+  }
+
   /** Casilla de la salida a la que mejor se llega desde donde está el jugador (y su altura). */
   exitTarget(ex: Exit): [number, number, number] | null {
     const g = this.grid, pm = this.player.m;
@@ -232,6 +240,7 @@ export class Game {
         this.cam.y -= dy * k;
         this.cam.follow = false;
         this.focus = null;
+        this.watchBowl = null;
       },
       dragEnd: () => {},
       zoom: (s) => this.view.setZoomBias(this.view.zoomBias + s),
@@ -474,6 +483,30 @@ export class Game {
     this.cam.follow = true;
   }
 
+  /** retirada pendiente tras dejar un cuenco a un animal desconfiado */
+  private stepBack: { x: number; y: number; need: number; t: number } | null = null;
+  /** mientras se espera a que un animal se acerque al cuenco, la cámara encuadra cuenco y jugador */
+  private watchBowl: { x: number; y: number; z: number; id: string; t: number } | null = null;
+
+  private updateStepBack(dt: number): void {
+    const S = this.stepBack;
+    if (!S) return;
+    S.t -= dt;
+    if (S.t > 0) return; // dejar terminar el gesto de dar
+    this.stepBack = null;
+    const pl = this.player.m;
+    const dx = pl.x - S.x, dy = pl.y - S.y, l = Math.hypot(dx, dy) || 1;
+    if (l / TILE >= S.need) return;
+    // probar direcciones alrededor de «alejarse en línea recta» hasta encontrar sitio
+    for (const turn of [0, 0.5, -0.5, 1, -1, 1.6, -1.6]) {
+      const a = Math.atan2(dy, dx) + turn;
+      const r = (S.need + 0.7) * TILE;
+      const t = nearestWalkable(this.grid, Math.floor((S.x + Math.cos(a) * r) / TILE), Math.floor((S.y + Math.sin(a) * r) / TILE));
+      if (!t || Math.hypot(t[0] * TILE + 8 - S.x, t[1] * TILE + 8 - S.y) / TILE < S.need) continue;
+      if (this.walkTo(t[0], t[1])) return;
+    }
+  }
+
   private handlePending(dt: number): void {
     const P = this.pending;
     if (!P) return;
@@ -481,7 +514,6 @@ export class Game {
     const d = Math.hypot(pl.x - an.x, pl.y - an.y) / TILE;
     // con poca confianza, la comida se deja a cierta distancia
     const bowlAct = P.act === 'feed' || P.act === 'water';
-    const h = hearts(P.e.data);
     const reach = bowlAct ? Math.max(1.3, comfortDistance(P.e.data) * 0.5 + 0.6) : 1.35;
     if (d <= reach + 0.45 && (!pl.moving || d <= reach)) {
       pl.stop();
@@ -500,7 +532,12 @@ export class Game {
         }
         this.player.action = 'give';
         this.player.actionT = 1.1;
-        if (h <= 2) this.events.toast(h <= 1 ? `Deja el cuenco y aléjate un poco: ${P.e.data.name} es desconfiado.` : `Aléjate un pasito para que ${P.e.data.name} se anime.`);
+        // con poca confianza, el personaje se aparta solo hasta donde el animal se atreve a acercarse
+        const need = bowlDistance(P.e.data);
+        if (need > 0) {
+          this.stepBack = { x: bx, y: by, need, t: 1.1 };
+          this.watchBowl = { x: bx, y: by, z, id: P.e.data.id, t: 12 };
+        }
       } else {
         this.player.action = 'crouch';
         this.player.actionT = 1.6;
@@ -584,17 +621,31 @@ export class Game {
         return;
       }
     }
-    // el más cercano a la cámara primero
-    const hits = this.pop.entries.filter((e) => {
-      const [x, y, w, h] = e.ent.rect;
-      return wx >= x + w * 0.15 && wx <= x + w * 0.85 && wy >= y + h * 0.25 && wy <= y + h;
-    }).sort((a, b) => b.ent.m.x + b.ent.m.y - (a.ent.m.x + a.ent.m.y));
-    if (hits.length) {
-      this.events.animalTap(hits[0], cssX, cssY);
+    // animales: zona de toque generosa (elipse alrededor del cuerpo, nunca menor que un dedo)
+    // y, si hay varios, el más cercano al dedo y luego el más cercano a la cámara
+    const finger = 10 * this.view.dpr / this.view.zoom; // ~10 px CSS de margen extra
+    let best: Entry | null = null, bestD = Infinity;
+    for (const e of this.pop.entries) {
+      const S = e.ent.look.shape;
+      const [sx, sy] = e.ent.screenPos();
+      const cx = sx, cy = sy - S.legH * 1.3;
+      const rx = Math.max(13, (S.bodyLen + S.legH) * 0.55) + finger, ry = Math.max(11, S.legH * 1.3 + 4) + finger;
+      const d = ((wx - cx) / rx) ** 2 + ((wy - cy) / ry) ** 2;
+      if (d > 1) continue;
+      const score = d - (e.ent.m.x + e.ent.m.y) * 0.0005;
+      if (score < bestD) {
+        bestD = score;
+        best = e;
+      }
+    }
+    if (best) {
+      this.events.animalTap(best, cssX, cssY);
       return;
     }
     this.events.groundTap();
     this.pending = null;
+    this.stepBack = null;
+    this.watchBowl = null;
     // suelo: probar alturas de mayor a menor
     const heights = [...new Set(Array.from(this.grid.height))].sort((a, b) => b - a);
     for (const h of heights) {
@@ -646,6 +697,9 @@ export class Game {
       fountainDist: f ? Math.hypot(this.player.m.x - f.basin.cx, this.player.m.y - f.basin.cy) / TILE : 99,
     });
     this.handlePending(dt);
+    this.updateStepBack(dt);
+    for (const f of this.floaters) f.t += dt;
+    this.floaters = this.floaters.filter((f) => f.t < 1.6);
     if (!this.opts.shot) {
       this.pop.update(dt, {
         grid: this.grid, hour: this.hour, raining: rain, now: Date.now(),
@@ -732,7 +786,19 @@ export class Game {
       this.cam.x += dt * 7;
       if (this.cam.x > this.bounds[2] - this.view.w / 2 - 30) this.cam.x = this.bounds[0] + this.view.w / 2 + 30;
     }
-    if (this.focus) {
+    // encuadre del cuenco: hasta que el animal coma (o se canse de esperar, o muevas la cámara)
+    if (this.watchBowl) {
+      const W = this.watchBowl;
+      W.t -= dt;
+      const en = this.pop.entries.find((x) => x.data.id === W.id);
+      if (W.t <= 0 || !en || en.brain.mode === 'eat' && en.brain.t < 1) this.watchBowl = null;
+    }
+    if (this.watchBowl && !this.focus) {
+      const W = this.watchBowl, [px, py] = this.player.feet();
+      const k = 1 - Math.exp(-dt * 3);
+      this.cam.x += ((2 * (W.x - W.y) + px) / 2 - this.cam.x) * k;
+      this.cam.y += ((W.x + W.y - W.z + py) / 2 - 20 - this.cam.y) * k;
+    } else if (this.focus) {
       // centrar con suavidad al animal tocado (su menú queda en medio de la pantalla)
       const [sx, sy] = this.focus.e.ent.screenPos();
       const k = 1 - Math.exp(-dt * 6);
@@ -815,6 +881,27 @@ export class Game {
       b.drawImage(pixelEllipse(big - 3, Math.max(1, Math.ceil(big / 2.5) - 1), '#9d93bb'), Math.round(sx - camX - big + 3), Math.round(sy - camY - Math.ceil(big / 2.5) + 1));
     }
     b.globalCompositeOperation = 'source-over';
+    // anillo de distancia cómoda alrededor del cuenco de un animal desconfiado que aún no se atreve
+    for (const bowl of this.pop.bowls) {
+      if (bowl.state !== 'full') continue;
+      const en = this.pop.entries.find((x) => x.data.id === bowl.forId);
+      if (!en || en.brain.mode === 'goBowl' || en.brain.mode === 'eat') continue;
+      const need = bowlDistance(en.data);
+      if (need <= 0) continue;
+      const inside = Math.hypot(this.player.m.x - bowl.x, this.player.m.y - bowl.y) / TILE < need;
+      const R = need * TILE, n = Math.max(24, Math.round(need * 14));
+      const cx = 2 * (bowl.x - bowl.y) - camX, cy = bowl.x + bowl.y - bowl.z - camY;
+      const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 300);
+      b.globalAlpha = inside ? pulse : 0.35;
+      b.fillStyle = inside ? PALETTE.coral : PALETTE.cal4;
+      for (let i = 0; i < n; i++) {
+        if (i % 2) continue; // trazo discontinuo
+        const a = (i / n) * Math.PI * 2;
+        const wx = Math.cos(a) * R, wy = Math.sin(a) * R;
+        b.fillRect(Math.round(cx + 2 * (wx - wy)) - 1, Math.round(cy + (wx + wy)), 2, 1);
+      }
+      b.globalAlpha = 1;
+    }
     // objetos + entidades ordenados por profundidad (orden topológico de cajas)
     const list: Drawable[] = [];
     for (const o of this.objects) {
@@ -887,6 +974,38 @@ export class Game {
       const top = a.look.shape.legH * 2.3 + 10;
       b.globalAlpha = Math.min(1, a.reactionT * 2);
       b.drawImage(img, Math.round(sx - camX - img.width / 2), Math.round(sy - camY - top - lift));
+      b.globalAlpha = 1;
+    }
+    // bocadillos de necesidad: quién necesita algo, sin tener que tocar a nadie
+    const now = performance.now() / 1000;
+    for (const en of this.pop.entries) {
+      const a = en.ent, D = en.data, mode = en.brain.mode;
+      if (a.reaction || mode === 'eat' || mode === 'goBowl' || mode === 'care' || mode === 'feeder') continue;
+      if (this.pop.bowls.some((bw) => bw.forId === D.id && bw.state === 'full')) continue;
+      const kind = D.injured ? 'hurt' : Math.min(D.hunger, D.thirst) < 0.35 ? (D.hunger <= D.thirst ? 'food' : 'water') : null;
+      if (!kind) continue;
+      const img = needBubble(kind);
+      const [sx, sy] = a.screenPos();
+      const top = a.look.shape.legH * 2.3 + 12 + Math.round(Math.sin(now * 2 + D.seed) * 1.5);
+      b.drawImage(img, Math.round(sx - camX - img.width / 2), Math.round(sy - camY - top));
+    }
+    // +♥ al ganar confianza
+    for (const f of this.floaters) {
+      const k = f.t / 1.6;
+      const sx = 2 * (f.x - f.y) - camX, sy = f.x + f.y - f.z - camY - k * 16;
+      b.globalAlpha = Math.min(1, (1 - k) * 2.2);
+      const h = heart();
+      b.fillStyle = PALETTE.mustard;
+      const px = Math.round(sx - h.width / 2 - 4), py = Math.round(sy - h.height / 2);
+      b.fillRect(px, py + 2, 3, 1);
+      b.fillRect(px + 1, py + 1, 1, 3);
+      b.drawImage(h, px + 4, py);
+      if (f.big) {
+        // corazón entero: dos más que se abren a los lados
+        const o = Math.round(4 + k * 8);
+        b.drawImage(h, px + 4 - o, py + 4);
+        b.drawImage(h, px + 4 + o, py + 4);
+      }
       b.globalAlpha = 1;
     }
     v.present();

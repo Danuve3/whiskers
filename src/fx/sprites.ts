@@ -121,3 +121,23 @@ export function cloth(i: number): HTMLCanvasElement {
   const c = CLOTHES[i % CLOTHES.length];
   return matrix('cloth' + (i % CLOTHES.length), c.rows, c.key);
 }
+
+// Bocadillos de necesidad sobre los animales (comida, agua, tirita)
+const BUBBLE = (inner: string[]) => [
+  '.kkkkkkkkk.',
+  'kwwwwwwwwwk',
+  ...inner.map((r) => 'kw' + r.replace(/\./g, 'w') + 'wk'),
+  'kwwwwwwwwwk',
+  '.kkkkwkkkk.',
+  '....kwk....',
+  '.....k.....',
+];
+const NEED_ART: Record<'food' | 'water' | 'hurt', string[]> = {
+  food: BUBBLE(['.b.b.b.', 'bybyby.', 'rrrrrrr', '.RrrrR.', '..RRR..']),
+  water: BUBBLE(['...s...', '..sss..', '.sSsss.', '.sSSss.', '..sss..']),
+  hurt: BUBBLE(['.....tt', '...tttt', '..tpwt.', 'tttt...', 'tt.....']),
+};
+const NEED_KEY: Key = { '.': null, k: 'ink2', w: 'cal4', b: 'wood3', y: 'mustard', r: 'coral', R: 'rose', s: 'sky', S: 'water2', t: 'tan', p: 'peach' };
+export function needBubble(kind: 'food' | 'water' | 'hurt'): HTMLCanvasElement {
+  return matrix('need-' + kind, NEED_ART[kind], NEED_KEY);
+}

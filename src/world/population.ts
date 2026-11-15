@@ -27,6 +27,11 @@ export interface Entry {
 }
 
 const BOWL_ROWS = ['..kkkkkk..', '.kfffffFk.', 'kRRRRRRRRk', 'krRRRRRRrk', '.kkkkkkkk.'];
+/** A qué distancia (tiles) tiene que estar el jugador del cuenco para que este animal se acerque. */
+export function bowlDistance(D: AnimalData): number {
+  return [5, 4, 2.6, 0, 0][Math.min(4, hearts(D))] * (D.personality === 'timido' ? 1.15 : 1) * (D.personality === 'gloton' ? 0.75 : 1);
+}
+
 export class Bowl implements Drawable {
   box: Box;
   rect: [number, number, number, number];
@@ -234,7 +239,7 @@ export class Population {
     const bowl = this.bowls.find((b) => b.forId === D.id && b.state === 'full');
     if (bowl && B.mode !== 'goBowl') {
       // según la confianza, solo se acerca si estás lo bastante lejos
-      const need = [5, 4, 2.6, 0, 0][Math.min(4, hearts(D))] * (D.personality === 'timido' ? 1.15 : 1) * (D.personality === 'gloton' ? 0.75 : 1);
+      const need = bowlDistance(D);
       if (tdist(bowl.x, bowl.y, w.player.x, w.player.y) >= need) {
         B.mode = 'goBowl';
         B.bowl = bowl;

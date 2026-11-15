@@ -72,9 +72,15 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   const needBox = el('div', { class: 'needs' },
     need('comida', 'food', () => D.hunger), need('agua', 'thirst', () => D.thirst), need('corazon', 'well', () => D.wellbeing));
   const hurt = el('div', { class: 'hurt' }, iconImg('tirita', 'icon tiny'), 'Necesita una tirita');
-  const tag = el('div', { class: 'tag panel' }, el('span', {}, D.name), heartsRow(hearts(D)), needBox, hurt);
+  // progreso hacia el siguiente corazón
+  const trustFill = el('i', {});
+  const trustBar = el('div', { class: 'trustbar' }, trustFill);
+  const tag = el('div', { class: 'tag panel' }, el('span', {}, D.name), heartsRow(hearts(D)), trustBar, needBox, hurt);
   let lastHearts = hearts(D);
   const refreshNeeds = () => {
+    const tr = Math.max(0, Math.min(5, D.trust));
+    trustBar.style.display = tr >= 5 ? 'none' : '';
+    trustFill.style.width = `${Math.round((tr - Math.floor(tr)) * 100)}%`;
     for (const [fill, v] of needs) fill.style.width = `${Math.round(Math.max(0, Math.min(1, v())) * 100)}%`;
     hurt.style.display = D.injured ? '' : 'none';
     const h = hearts(D);
