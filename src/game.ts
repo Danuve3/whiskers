@@ -10,7 +10,7 @@ import { gradeAt, weatherGrade, type Grade } from './fx/daylight.ts';
 import { Lighting, type LightSrc } from './fx/lighting.ts';
 import { Ambient, type Weather } from './fx/ambient.ts';
 import { pixelEllipse, rgb } from './fx/pixel.ts';
-import { heart, alert, zzz, note, needBubble } from './fx/sprites.ts';
+import { heart, alert, zzz, note, needBubble, cardboardBox } from './fx/sprites.ts';
 import { PALETTE } from './gfx/palette.ts';
 import * as sfx from './audio/sfx.ts';
 import { music, moodFor } from './audio/music.ts';
@@ -27,6 +27,7 @@ import { matrix } from './fx/sprites.ts';
 import type { Outfit } from './sprites/player.ts';
 import { Population, bowlDistance, type Entry } from './world/population.ts';
 import { isFeeder, SERVINGS } from './sim/feeders.ts';
+import type { MomentId } from './sim/life.ts';
 import { generateAnimal, comfortDistance, species, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
 export interface WorldState {
@@ -69,6 +70,10 @@ export interface GameEvents {
   fountain?(): void;
   zoneChanged?(z: ZoneId): void;
   laserDone?(e: Entry): void;
+  /** vida propia de los animales */
+  friends?(a: Entry, b: Entry): void;
+  moment?(id: MomentId, e: Entry): void;
+  routine?(e: Entry, text: string): void;
 }
 
 interface StaticObj extends Drawable {
@@ -121,6 +126,12 @@ export class Game {
   /** Animal en el que se centra la cámara mientras su menú está abierto. */
   private focus: { e: Entry; prevFollow: boolean } | null = null;
   bounds: [number, number, number, number] = [0, 0, 0, 0];
+  /** Quita a un animal de la zona (adoptado). */
+  removeAnimal(id: string): void {
+    this.pop.entries = this.pop.entries.filter((e) => e.data.id !== id);
+    if (this.pop.request?.id === id) this.pop.clearRequest();
+  }
+
   /** Corazoncito que sube sobre el animal al ganar confianza (más grande si gana un corazón entero). */
   floatTrust(e: Entry, heartUp: boolean): void {
     const m = e.ent.m;
@@ -341,7 +352,10 @@ export class Game {
         this.world.stats.calcetines = (this.world.stats.calcetines ?? 0) + 1;
         this.events.toast(`¡${e.data.name} te ha robado un calcetín!`);
       },
+      friends: (a, b) => this.events.friends?.(a, b),
+      moment: (id, e) => this.pendingMoments.push({ id, e, t: 6 }),
     });
+    this.pop.setSpots(this.namedSpots());
     this.populate();
     // vecinos
     for (const n of this.zoneDef.npcs) {
@@ -511,6 +525,31 @@ export class Game {
   request(e: Entry, act: Action, food: FoodId = 'pienso'): void {
     this.pending = { e, act, food, repath: 0 };
     this.cam.follow = true;
+  }
+
+  /** momentos raros recién empezados: cuentan si los ves (en pantalla y cerca) en unos segundos */
+  private pendingMoments: { id: MomentId; e: Entry; t: number }[] = [];
+  /** tiempo mirando a un animal que hace su costumbre (para descubrirla) */
+  private routineWatch = new Map<string, number>();
+
+  /** Sitios con nombre de la zona, para las costumbres de los animales. */
+  private namedSpots(): { tile: [number, number]; place: string }[] {
+    const de: Record<ZoneId, string> = { calle: 'de tu calle', plaza: 'de la plaza', parque: 'de la Alameda', mercado: 'del mercado', descampado: 'del descampado', puerto: 'del puerto' };
+    const z = de[this.zoneId];
+    const out: { tile: [number, number]; place: string }[] = [];
+    for (const b of this.zone.meta.benches) out.push({ tile: b, place: `junto al banco ${z}` });
+    for (const f of this.zone.meta.fountains) out.push({ tile: [Math.floor(f.basin.cx / TILE) + 2, Math.floor(f.basin.cy / TILE) + 2], place: `junto a la fuente ${z}` });
+    this.zoneDef.homes.slice(0, 3).forEach((h, i) => out.push({ tile: h, place: ['en la esquina', 'en el portal', 'en el rincón'][i] + ' ' + z }));
+    if (this.zoneDef.portal) out.push({ tile: [Math.floor(this.zoneDef.portal[0] / TILE), Math.floor(this.zoneDef.portal[1] / TILE)], place: 'en tu felpudo' });
+    return out.filter((s) => nearestWalkable(this.grid, s.tile[0], s.tile[1])).map((s) => ({ ...s, tile: nearestWalkable(this.grid, s.tile[0], s.tile[1])! }));
+  }
+
+  /** ¿Se ve este animal (en pantalla y no muy lejos)? */
+  private sees(e: Entry): boolean {
+    const v = this.view, [sx, sy] = e.ent.screenPos();
+    const dx = sx - this.cam.x, dy = sy - this.cam.y;
+    const near = Math.hypot(e.ent.m.x - this.player.m.x, e.ent.m.y - this.player.m.y) / TILE < 9;
+    return near && Math.abs(dx) < v.w / 2 - 8 && Math.abs(dy) < v.h / 2 - 8;
   }
 
   /** retirada pendiente tras dejar un cuenco a un animal desconfiado */
@@ -766,12 +805,33 @@ export class Game {
     this.floaters = this.floaters.filter((f) => f.t < 1.6);
     if (!this.opts.shot) {
       this.pop.update(dt, {
-        grid: this.grid, hour: this.hour, raining: rain, now: Date.now(),
+        grid: this.grid, hour: this.hour, raining: rain, now: Date.now(), wind: this.weather.wind, season: this.season, snow: this.snowCover,
         player: { x: this.player.m.x, y: this.player.m.y, moving: this.player.m.moving },
         shelters: [...this.zone.meta.shelters, ...this.decor.filter((d) => d.id === 'caseta').map((d) => [d.tx - 0.5, d.ty - 0.5, d.tx + 1.5, d.ty + 1.5] as [number, number, number, number])], approaching: this.pending?.e.data.id ?? null,
       });
     } else for (const e of this.pop.entries) e.ent.update(dt, this.grid);
     for (const e of this.pop.entries) e.ent.bandage = e.brain.bandage > 0;
+    // momentos raros: solo cuentan si los has visto
+    for (const M of this.pendingMoments) {
+      M.t -= dt;
+      if (M.t > 0 && this.pop.entries.includes(M.e) && this.sees(M.e)) {
+        M.t = 0;
+        this.events.moment?.(M.id, M.e);
+      }
+    }
+    this.pendingMoments = this.pendingMoments.filter((M) => M.t > 0);
+    // costumbres: mirar un rato a un animal que la está haciendo la descubre
+    if (!this.opts.shot)
+      for (const e of this.pop.entries) {
+        if (e.data.routineKnown || !this.pop.doingRoutine(e) || !this.sees(e)) continue;
+        const t = (this.routineWatch.get(e.data.id) ?? 0) + dt;
+        this.routineWatch.set(e.data.id, t);
+        if (t > 4) {
+          e.data.routineKnown = true;
+          const rt = this.pop.routineOf(e.data);
+          if (rt) this.events.routine?.(e, rt.text);
+        }
+      }
     // láser: el gato persigue el punto rojo
     if (this.laser) {
       const L = this.laser, e = L.e;
@@ -1005,6 +1065,16 @@ export class Game {
       if (x - camX > v.w || y - camY > v.h || x + w - camX < 0 || y + h - camY < 0) continue;
       list.push(o);
     }
+    // gato en una caja: la caja tiene parte de atrás y de delante para que el gato quede dentro
+    const BX = this.pop.box;
+    if (BX) {
+      const bsx = 2 * (BX.x - BX.y), bsy = BX.x + BX.y - BX.z;
+      const back = cardboardBox('back'), front = cardboardBox('front');
+      list.push(
+        { box: [BX.x - 8, BX.y - 8, BX.z, BX.x + 8, BX.y - 7, BX.z + 12], rect: [bsx - 15, bsy - 11, 31, 26], draw: (ctx, cx, cy) => ctx.drawImage(back, Math.round(bsx - 15 - cx), Math.round(bsy - 11 - cy)) },
+        { box: [BX.x - 8, BX.y + 7, BX.z, BX.x + 8, BX.y + 8, BX.z + 10], rect: [bsx - 15, bsy - 11, 31, 26], draw: (ctx, cx, cy) => ctx.drawImage(front, Math.round(bsx - 15 - cx), Math.round(bsy - 11 - cy)) },
+      );
+    }
     list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent));
     for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
@@ -1074,9 +1144,23 @@ export class Game {
     }
     // bocadillos de necesidad: quién necesita algo, sin tener que tocar a nadie
     const now = performance.now() / 1000;
+    const REQ = this.pop.request;
     for (const en of this.pop.entries) {
       const a = en.ent, D = en.data, mode = en.brain.mode;
-      if (a.reaction || mode === 'eat' || mode === 'goBowl' || mode === 'care' || mode === 'feeder') continue;
+      // petición: bocadillo con lo que quiere y un «!» que salta
+      if (REQ && REQ.id === D.id && !a.reaction) {
+        const k = REQ.kind === 'comida' ? 'food' : REQ.kind === 'agua' ? 'water' : REQ.kind === 'caricias' ? 'heart' : 'play';
+        const img = needBubble(k, species(D) === 'cat');
+        const [sx, sy] = a.screenPos();
+        const top = a.look.shape.legH * 2.3 + 13 + Math.round(Math.abs(Math.sin(now * 4)) * 3);
+        const X = Math.round(sx - camX - img.width / 2), Y = Math.round(sy - camY - top);
+        b.drawImage(img, X, Y);
+        b.fillStyle = PALETTE.mustard;
+        b.fillRect(X - 3, Y + 1, 2, 4);
+        b.fillRect(X - 3, Y + 6, 2, 1);
+        continue;
+      }
+      if (a.reaction || mode === 'eat' || mode === 'goBowl' || mode === 'care' || mode === 'feeder' || mode === 'box') continue;
       if (this.pop.bowls.some((bw) => bw.forId === D.id && bw.state === 'full')) continue;
       const kind = D.injured ? 'hurt' : Math.min(D.hunger, D.thirst) < 0.35 ? (D.hunger <= D.thirst ? 'food' : 'water') : null;
       if (!kind) continue;

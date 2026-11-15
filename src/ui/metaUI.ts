@@ -13,6 +13,7 @@ import { SKY_NAMES, type Sky } from '../sim/weather.ts';
 import { PALETTE, type ColorName } from '../gfx/palette.ts';
 import type { MetaHost } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
+import { momentsGrid, lettersList } from './life.ts';
 
 // ---------------------------------------------------------------- Retratos
 export function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
@@ -116,14 +117,16 @@ function next(): void {
 }
 
 // ---------------------------------------------------------------- Álbum
-export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: 'Razas' | 'Animales' | 'Vitrina' = 'Animales'): void {
+type AlbumTab = 'Razas' | 'Animales' | 'Vitrina' | 'Momentos' | 'Cartas';
+export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: AlbumTab = 'Animales'): void {
   const sheet = new Sheet('Álbum', 'album');
   const tabs = el('div', { class: 'tabs' });
   const grid = el('div', { class: 'grid' });
   const count = el('div', { class: 'count' });
   sheet.body.append(tabs, count, grid);
   const render = () => {
-    tabs.replaceChildren(...(['Animales', 'Razas', 'Vitrina'] as const).map((t) => button(t, () => {
+    const unread = (h.meta.letters ?? []).filter((L) => !L.read).length;
+    tabs.replaceChildren(...(['Animales', 'Razas', 'Vitrina', 'Momentos', 'Cartas'] as const).map((t) => button(t === 'Cartas' && unread ? `Cartas (${unread})` : t, () => {
       tab = t;
       render();
     }, t === tab ? 'on' : '')));
@@ -142,9 +145,13 @@ export function openAlbum(h: MetaHost, onAnimal: (a: AnimalData) => void, tab: '
         const card = el('button', { class: `card-mini panel ${a.rare ? 'rare' : ''}`, onclick: () => {
           sfx.ui('tap');
           void sheet.close().then(() => onAnimal(a));
-        } }, portrait(a, false), el('div', { class: 'nm' }, a.name), heartsRow(hearts(a)));
+        } }, portrait(a, false), el('div', { class: 'nm' }, a.name), a.adoptedBy ? el('div', { class: 'small' }, 'adoptado') : heartsRow(hearts(a)));
         grid.append(card);
       }
+    } else if (tab === 'Momentos') {
+      count.textContent = momentsGrid(grid, h.meta);
+    } else if (tab === 'Cartas') {
+      count.textContent = lettersList(grid, h.meta, h.animals);
     } else {
       const total = GIFTS.length;
       const have = Object.keys(h.meta.vitrina).length;

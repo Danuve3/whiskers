@@ -1,14 +1,15 @@
 // Menú radial sobre un animal, ficha con su información y avisos suaves.
 import { el, button, iconImg, Sheet, onBack } from './kit.ts';
 import { heartIcon } from './art.ts';
-import { canDo, hearts, FOODS, PERSONALITIES, type Action, type FoodId } from '../sim/model.ts';
+import { canDo, hearts, FOODS, PERSONALITIES, type Action, type FoodId, type AnimalData } from '../sim/model.ts';
 import { BREED_BY_ID } from '../sprites/breeds.ts';
-import { getFrames } from '../sprites/animals.ts';
+import { getFrames, type Look } from '../sprites/animals.ts';
 import type { Entry } from '../world/population.ts';
 import type { Game } from '../game.ts';
 import { PALETTE } from '../gfx/palette.ts';
 import * as sfx from '../audio/sfx.ts';
 import { species } from '../sim/model.ts';
+import { nextTrick } from '../sim/life.ts';
 
 // ---------------------------------------------------------------- Avisos
 let toastBox: HTMLDivElement | null = null;
@@ -56,7 +57,7 @@ function uiUnit(): number {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 2;
 }
 
-export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onLaser?: (e: Entry) => void): void {
+export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onLaser?: (e: Entry) => void, onTrick?: (e: Entry) => void): void {
   closeRadial();
   const D = e.data;
   if (species(D) === 'cat') sfx.meow(e.ent.look.shape.legH);
@@ -100,7 +101,7 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   root.append(ring, tag, why);
   const inv = game.world.inventory;
   const specials = (Object.keys(FOODS) as FoodId[]).filter((f) => f !== 'pienso' && (inv[f] ?? 0) > 0);
-  type B = { icon: string; act: Action | 'card' | 'laser'; label: string };
+  type B = { icon: string; act: Action | 'card' | 'laser' | 'trick'; label: string };
   const items: B[] = [
     { icon: foodIcon(D), act: 'feed', label: 'Dar de comer' },
     { icon: 'gota', act: 'water', label: 'Dar agua' },
@@ -109,15 +110,22 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
     { icon: 'ficha', act: 'card', label: 'Ficha' },
   ];
   if (species(D) === 'cat') items.splice(4, 0, { icon: 'laser', act: 'laser', label: 'Jugar con el láser' });
+  // perros que ya confían: enseñarles un truco nuevo
+  if (onTrick && nextTrick(D)) items.splice(4, 0, { icon: 'hueso', act: 'trick', label: 'Enseñar un truco' });
   const R = items.length > 5 ? 38 : 34; // radio en unidades de UI
   let foodRow: HTMLElement | null = null;
   items.forEach((it, i) => {
     const a = Math.PI + (i / (items.length - 1)) * Math.PI; // arco por encima
-    const avail = it.act === 'card' ? { ok: true } : it.act === 'laser' ? (hearts(D) >= 2 ? { ok: true } : { ok: false, reason: 'Aún le da miedo jugar contigo (2 corazones)' }) : canDo(D, it.act);
+    const avail = it.act === 'card' || it.act === 'trick' ? { ok: true } : it.act === 'laser' ? (hearts(D) >= 2 ? { ok: true } : { ok: false, reason: 'Aún le da miedo jugar contigo (2 corazones)' }) : canDo(D, it.act);
     const b = button(iconImg(it.icon), () => {
       if (it.act === 'card') {
         closeRadial();
         onCard(e);
+        return;
+      }
+      if (it.act === 'trick') {
+        closeRadial();
+        onTrick?.(e);
         return;
       }
       if (it.act === 'laser') {
@@ -200,14 +208,13 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
 }
 
 // ---------------------------------------------------------------- Ficha
-export function openCard(e: Entry, onRename: (name: string) => void): void {
-  const D = e.data;
+export function openCard(D: AnimalData, look: Look, onRename: (name: string) => void, extras: string[] = []): void {
   const b = BREED_BY_ID[D.breed];
   const sheet = new Sheet(D.name, 'card');
   const canvas = el('canvas', { class: 'portrait', width: 64, height: 56 });
   const ctx = canvas.getContext('2d')!;
-  const fr = getFrames(e.ent.look, 'sit', 0);
-  const big = e.ent.look.shape.legH > 15;
+  const fr = getFrames(look, 'sit', 0);
+  const big = look.shape.legH > 15;
   const f = fr[0];
   ctx.fillStyle = PALETTE.cal3;
   ctx.fillRect(14, 49, 36, 3);
@@ -230,7 +237,9 @@ export function openCard(e: Entry, onRename: (name: string) => void): void {
   const bars = el('div', { class: 'bars meta' },
     'Comida', bar('food', D.hunger), 'Agua', bar('thirst', D.thirst), 'Bienestar', bar('well', D.wellbeing),
   );
-  const blurb = el('div', { class: 'blurb' }, `${PERSONALITIES[D.personality].blurb} ${D.injured ? 'Tiene un rasguño que necesita una tirita.' : ''} Os conocisteis el ${met}.`);
+  const blurb = el('div', { class: 'blurb' }, `${PERSONALITIES[D.personality].blurb} ${D.injured ? 'Tiene un rasguño que necesita una cura.' : ''} Os conocisteis el ${met}.`);
+  // su vida: amigos, costumbre, trucos, edad…
+  const life = el('div', { class: 'life' }, ...extras.map((t) => el('div', { class: 'small' }, '· ' + t)));
   const actions = el('div', { class: 'actions' });
   const rename = button('Cambiar nombre', () => {
     const input = el('input', { value: D.name, maxlength: '18' });
@@ -248,6 +257,6 @@ export function openCard(e: Entry, onRename: (name: string) => void): void {
   });
   const close = button(iconImg('cerrar', 'icon small'), () => void sheet.close());
   actions.append(rename, close);
-  sheet.body.append(el('div', { class: 'head' }, canvas, info), bars, blurb, actions);
+  sheet.body.append(el('div', { class: 'head' }, canvas, info), bars, blurb, life, actions);
   sheet.open();
 }

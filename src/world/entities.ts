@@ -220,6 +220,10 @@ export class Animal implements Drawable {
   size: number;
   /** tirita recién puesta */
   bandage = false;
+  /** trotar en el sitio (dar vueltas, chapotear) sin volver a quieto */
+  inPlace = false;
+  /** se dibuja más abajo (dentro de una caja) */
+  sink = 0;
   /** gorrito de Navidad */
   hat = false;
 
@@ -267,7 +271,7 @@ export class Animal implements Drawable {
         this.state = gait;
       }
       this.anim.set(gait + this.m.dir, getFrames(this.look, gait, this.m.dir));
-    } else if (this.state === 'walk' || this.state === 'trot' || this.state === 'run' || this.state === 'sneak') {
+    } else if (!this.inPlace && (this.state === 'walk' || this.state === 'trot' || this.state === 'run' || this.state === 'sneak')) {
       this.state = 'idle';
       this.anim.set('idle' + this.m.dir, getFrames(this.look, 'idle', this.m.dir));
     } else if (!this.anim.frames.length) {
@@ -303,7 +307,7 @@ export class Animal implements Drawable {
     const f = this.anim.frame;
     if (!f) return;
     const sx = Math.round(2 * (this.m.x - this.m.y) - camX), sy = Math.round(this.m.x + this.m.y - this.m.z - camY);
-    const X = sx - f.ox, Y = sy - f.oy;
+    const X = sx - f.ox, Y = sy - f.oy + this.sink;
     ctx.drawImage(f.canvas, X, Y);
     if (this.blinking > 0 && f.eyeState === 'open') {
       ctx.fillStyle = PALETTE[f.outline as ColorName];

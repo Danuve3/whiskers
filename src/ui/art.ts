@@ -598,6 +598,24 @@ ICONS.cruz = [
   '......kkkk......',
   '................',
 ];
+ICONS.hueso = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '..kk........kk..',
+  '.kwwk......kwwk.',
+  '.kwwwkkkkkkwwck.',
+  '..kwwwwwwwwwwk..',
+  '..kcwwwwwwwwck..',
+  '.kwwckkkkkkcwwk.',
+  '.kwck......kcck.',
+  '..kk........kk..',
+  '................',
+  '................',
+  '................',
+  '................',
+];
 ICONS.dcha = ICONS.izq.map((r) => r.split('').reverse().join(''));
 
 export function icon(name: string): string {

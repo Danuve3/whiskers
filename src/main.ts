@@ -5,7 +5,7 @@ import { setupUI, button, Sheet, el, setHaptics, haptic } from './ui/kit.ts';
 import { openEditor } from './ui/editor.ts';
 import { load, store, type SaveData } from './save/save.ts';
 import { openRadial, closeRadial, openCard, toast } from './ui/animalUI.ts';
-import { decay, hearts, FOODS } from './sim/model.ts';
+import { decay, hearts, FOODS, species, rng, type Action } from './sim/model.ts';
 import { audio } from './audio/engine.ts';
 import { music } from './audio/music.ts';
 import * as sfx from './audio/sfx.ts';
@@ -13,7 +13,11 @@ import { openSettings } from './ui/settings.ts';
 import { paramsFor, type Sky } from './sim/weather.ts';
 import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
-import { rewardText } from './sim/progress.ts';
+import { rewardText, NEIGHBORS } from './sim/progress.ts';
+import { lifeLines, openTrickGame, openAdoption } from './ui/life.ts';
+import { REQUEST_ACTION, REQUEST_BONUS, MOMENTS, nextTrick, pickMother, makeLitter, adoptionCandidate, letterText, ADOPTERS } from './sim/life.ts';
+import { makeLook } from './sprites/breeds.ts';
+import type { Entry } from './world/population.ts';
 import { ZONES, zoneOpen, type ZoneId } from './world/zones.ts';
 import { openWelcome, openFishing } from './ui/extras.ts';
 import { showTitle } from './ui/title.ts';
@@ -99,15 +103,95 @@ function wardrobe(title: string) {
 
 function card(a: (typeof W.animals)[number]) {
   const e = game.pop.entries.find((x) => x.data.id === a.id);
-  if (!e) return;
   bump(host, 'fichas');
   check();
-  openCard(e, (n) => {
-    e.data.name = n;
-    e.ent.name = n;
+  const look = e?.ent.look ?? makeLook(a.breed, a.variant, a.seed, a.rare);
+  const routine = e ? game.pop.routineOf(a) : null;
+  const extras = lifeLines(a, W.animals, routine, Date.now(), (id) => NEIGHBORS.find((n) => n.id === id)?.name ?? 'un vecino');
+  openCard(a, look, (n) => {
+    a.name = n;
+    if (e) e.ent.name = n;
     bump(host, 'renombres');
     check();
-  });
+  }, extras);
+}
+
+// ---------------------------------------------------------------- Vida propia de los animales
+const nbName = (id: string) => NEIGHBORS.find((n) => n.id === id)?.name ?? 'un vecino';
+function lifeTick(): void {
+  const now = Date.now();
+  const busy = !!document.querySelector('.sheet.open, .title-screen') || (!!tuto && !tuto.done);
+  const open = (W.meta.zonesOpen ?? ['calle']) as ZoneId[];
+  const living = W.animals.filter((a) => !a.adoptedBy && open.includes(a.zone as ZoneId));
+  // camada: una tirada por día real (más probable en primavera)
+  const day = Math.floor(now / 86_400_000);
+  if (W.meta.litterDay !== day) {
+    W.meta.litterDay = day;
+    const mom = pickMother(living, now, game.season, W.meta.lastLitter ?? 0, rng(day * 7919 + 13)());
+    if (mom) {
+      W.meta.lastLitter = now;
+      W.nextSeed += 31;
+      const kids = makeLitter(mom, now, W.nextSeed * 7 + 101, W.animals.map((a) => a.name));
+      const near = game.pop.entries.find((x) => x.data.id === mom.id);
+      for (const k of kids) {
+        W.animals.push(k);
+        if (near) game.pop.add(k, near.ent.m.tx, near.ent.m.ty);
+      }
+      bump(host, 'camadas');
+      toast(`¡${mom.name} ha tenido ${kids.length} ${species(mom) === 'cat' ? 'gatitos' : 'cachorros'} en ${ZONES[mom.zone as ZoneId].title}! Se llaman ${kids.map((k) => k.name).join(', ')}.`, 5200);
+      haptic([16, 60, 16]);
+      check();
+    }
+  }
+  // adopción: un vecino se ofrece a llevarse a casa a alguien muy querido
+  if (!busy) {
+    const c = adoptionCandidate(living, now, W.meta.lastOffer ?? 0);
+    if (c) {
+      W.meta.lastOffer = now;
+      const who = ADOPTERS[(c.seed + day) % ADOPTERS.length];
+      openAdoption(c, nbName(who), (yes) => {
+        if (!yes) {
+          toast(`${c.name} se queda en el barrio. ${nbName(who)} lo entiende perfectamente.`);
+          return;
+        }
+        c.adoptedBy = who;
+        c.adoptedAt = Date.now();
+        c.zone = 'adoptado';
+        game.removeAnimal(c.id);
+        bump(host, 'adopciones');
+        toast(`${c.name} se va a vivir con ${nbName(who)}. Pronto te llegará carta.`, 4200);
+        check();
+      });
+    }
+  }
+  // cartas de los adoptados (la primera al día siguiente, luego cada par de días)
+  W.meta.letters ??= [];
+  for (const a of W.animals.filter((x) => x.adoptedBy)) {
+    const mine = W.meta.letters.filter((L) => L.animal === a.id);
+    const lastAt = mine.length ? Math.max(...mine.map((L) => L.at)) : a.adoptedAt ?? now;
+    if (now - lastAt > 86_400_000 * (mine.length ? 2 : 1)) {
+      W.meta.letters.push({ animal: a.id, from: nbName(a.adoptedBy!), text: letterText(a.name, nbName(a.adoptedBy!), mine.length), at: now });
+      bump(host, 'cartas');
+      toast(`Tienes carta de ${nbName(a.adoptedBy!)}: noticias de ${a.name}. Mírala en el álbum.`, 4200);
+    }
+  }
+}
+
+/** ¿Atiende esta acción lo que el animal estaba pidiendo? */
+function fulfil(e: Entry, act: Action | 'laser'): void {
+  const R = game.pop.request;
+  if (!R || R.id !== e.data.id) return;
+  const want = REQUEST_ACTION[R.kind];
+  const ok = want === act || (R.kind === 'jugar' && (act === 'laser' || (act === 'pet' && species(e.data) === 'dog')));
+  if (!ok) return;
+  e.data.trust = Math.min(5, e.data.trust + REQUEST_BONUS);
+  e.data.trustMax = Math.max(e.data.trustMax, e.data.trust);
+  game.pop.clearRequest();
+  game.floatTrust(e, true);
+  haptic([16, 60, 16]);
+  bump(host, 'peticiones');
+  toast(`¡Justo lo que quería ${e.data.name}! Confía un poquito más en ti.`);
+  check();
 }
 
 game.events = {
@@ -117,6 +201,16 @@ game.events = {
     openRadial(game, e, (en) => card(en.data), (en) => {
       game.startLaser(en);
       laserBar.style.display = '';
+      fulfil(en, 'laser');
+    }, (en) => {
+      const tr = nextTrick(en.data);
+      if (!tr) return;
+      openTrickGame(en.data, en.ent.look, tr.name, () => {
+        (en.data.tricks ??= []).push(tr.id);
+        bump(host, 'trucos');
+        en.data.trust = Math.min(5, en.data.trust + 0.2);
+        check();
+      });
     });
     if (!wasKnown) check();
   },
@@ -130,6 +224,29 @@ game.events = {
   groundTap: () => {
     closeRadial();
     tuto?.event('moved');
+  },
+  friends: (a, b) => {
+    bump(host, 'amistades');
+    toast(`${a.data.name} y ${b.data.name} se han hecho amigos.`);
+    haptic(10);
+    check();
+  },
+  moment: (id, e) => {
+    const M = (W.meta.moments ??= {});
+    const first = !M[id];
+    M[id] = { n: (M[id]?.n ?? 0) + 1, first: M[id]?.first ?? Date.now() };
+    bump(host, 'momentos');
+    if (first) {
+      toast(`✦ Momento nuevo: ${MOMENTS[id].name}. ${e.data.name} · ${MOMENTS[id].text}`, 4200);
+      haptic([8, 40, 8]);
+      sfx.gift();
+    }
+    check();
+  },
+  routine: (e, text) => {
+    bump(host, 'costumbres');
+    toast(`Has descubierto una costumbre de ${e.data.name}: ${text}.`, 4500);
+    check();
   },
   firstGesture: () => {
     audio.start();
@@ -145,6 +262,7 @@ game.events = {
     const key = act === 'feed' ? 'alimentar' : act === 'water' ? 'agua' : act === 'heal' ? 'curar' : 'caricias';
     bump(host, key);
     if (res.trustGain > 0 || res.heartUp) game.floatTrust(e, res.heartUp);
+    fulfil(e, act);
     // vibración suave: ronroneo al acariciar, latido al ganar un corazón
     if (res.heartUp) haptic([16, 60, 16]);
     else if (act === 'pet') haptic([6, 40, 6, 40, 6]);
@@ -284,6 +402,11 @@ void (async () => {
   }
   game.start();
   evaluate(host);
+  // vida propia: camadas, adopciones y cartas (cada medio minuto)
+  if (!shot) {
+    setTimeout(lifeTick, 8000);
+    setInterval(lifeTick, 30000);
+  }
   document.getElementById('ui')!.append(laserBar, fishBtn);
   setInterval(() => {
     const f = game.zoneDef.fishing;

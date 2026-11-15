@@ -23,6 +23,12 @@ export interface MetaState {
   /** pistas contextuales ya mostradas y zonas ya visitadas */
   hints?: string[];
   visited?: string[];
+  /** vida propia de los animales */
+  moments?: Record<string, { n: number; first: number }>;
+  letters?: { animal: string; from: string; text: string; at: number; read?: boolean }[];
+  lastLitter?: number;
+  litterDay?: number;
+  lastOffer?: number;
   /** casilla del jugador al guardar (se vuelve ahí al abrir el juego) */
   pos?: [number, number];
   /** cosas que se han usado alguna vez (mapa, armario…) para las pistas */

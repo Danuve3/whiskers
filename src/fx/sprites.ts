@@ -132,15 +132,65 @@ const BUBBLE = (inner: string[]) => [
   '....kwk....',
   '.....k.....',
 ];
-const NEED_ART: Record<'fish' | 'meat' | 'water' | 'hurt', string[]> = {
+const NEED_ART: Record<'fish' | 'meat' | 'water' | 'hurt' | 'heart' | 'yarn' | 'ball', string[]> = {
   // pescado (gatos) y muslo de pollo (perros), gota y cruz de farmacia
   fish: BUBBLE(['.......', '.SSSS.S', 'SKmmmSS', '.cccc.m', '.......']),
   meat: BUBBLE(['.oo....', 'oYoo...', 'oooO...', '.OOOc..', '....cc.']),
   water: BUBBLE(['...s...', '..sss..', '.sSsss.', '.sSSss.', '..sss..']),
   hurt: BUBBLE(['...g...', '...g...', '.ggggG.', '...g...', '...G...']),
+  // peticiones: que le acaricies (corazón) o jugar (ovillo para gatos, pelota para perros)
+  heart: BUBBLE(['.rr.rr.', 'rpRrrrr', 'rRrrrrr', '.rrrrr.', '...r...']),
+  yarn: BUBBLE(['..LLL..', '.LlLlL.', '.lLlLl.', '..LLL.L', '......L']),
+  ball: BUBBLE(['..rrr..', '.rwrrr.', '.rrrrR.', '.rrrRR.', '..RRR..']),
 };
-const NEED_KEY: Key = { '.': null, k: 'ink2', K: 'ink', w: 'cal4', c: 'cal2', s: 'sky', S: 'water2', m: 'stone3', o: 'tile3', O: 'tile2', Y: 'butter', g: 'veg3', G: 'veg2' };
-export function needBubble(kind: 'food' | 'water' | 'hurt', cat = false): HTMLCanvasElement {
-  const k = kind === 'food' ? (cat ? 'fish' : 'meat') : kind;
+const NEED_KEY: Key = { '.': null, k: 'ink2', K: 'ink', w: 'cal4', c: 'cal2', s: 'sky', S: 'water2', m: 'stone3', o: 'tile3', O: 'tile2', Y: 'butter', g: 'veg3', G: 'veg2', r: 'coral', R: 'rose', p: 'pink', l: 'lilac', L: 'plum' };
+export function needBubble(kind: 'food' | 'water' | 'hurt' | 'heart' | 'play', cat = false): HTMLCanvasElement {
+  const k = kind === 'food' ? (cat ? 'fish' : 'meat') : kind === 'play' ? (cat ? 'yarn' : 'ball') : kind;
   return matrix('need-' + k, NEED_ART[k], NEED_KEY);
+}
+
+// Caja de cartón (momento raro «un gato en una caja»): parte de atrás (paredes de dentro y
+// solapas) y de delante, para que el gato quede dentro. Ancla: centro de la base en (15, 7).
+const boxCache: Partial<Record<'back' | 'front', HTMLCanvasElement>> = {};
+export function cardboardBox(part: 'back' | 'front'): HTMLCanvasElement {
+  const hit = boxCache[part];
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = 31;
+  c.height = 26;
+  const x = c.getContext('2d')!;
+  const px = (col: ColorName, X: number, Y: number) => {
+    x.fillStyle = PALETTE[col];
+    x.fillRect(X, Y + 4, 1, 1); // +4: sitio para las solapas por arriba
+  };
+  const H = 9; // alto de las caras
+  if (part === 'front') {
+    for (let X = 1; X <= 29; X++) {
+      const top = X <= 15 ? 7 + Math.floor((X - 1) / 2) : 14 - Math.floor((X - 15) / 2);
+      for (let Y = top; Y <= top + H; Y++) px(X <= 15 ? 'wood3' : 'wood2', X, Y);
+      px('wood4', X, top); // canto de arriba
+      px('wood0', X, top + H + 1); // contorno de abajo
+      if (X === 15) for (let Y = top; Y <= top + H; Y++) px('wood1', X, Y); // arista delantera
+    }
+    for (let Y = 7; Y <= 7 + H + 1; Y++) {
+      px('wood0', 0, Y);
+      px('wood0', 30, Y);
+    }
+    // cinta de embalar y un garabato de rotulador
+    for (let X = 5; X <= 9; X++) px('butter', X, 11 + Math.floor((X - 1) / 2));
+    px('wood1', 21, 15);
+    px('wood1', 22, 14);
+    px('wood1', 23, 15);
+  } else {
+    for (let X = 1; X <= 29; X++) {
+      const rim = X <= 15 ? 7 - Math.floor((X - 1) / 2) : Math.floor((X - 15) / 2);
+      for (let Y = rim; Y <= rim + 7; Y++) px('wood1', X, Y); // pared de dentro, en sombra
+      px('wood4', X, rim);
+      // solapas abiertas: suben 4 px y se abren un poco hacia fuera
+      for (let k = 1; k <= 4; k++) px(X % 6 === 0 ? 'wood2' : 'wood3', X + (X <= 15 ? -Math.floor(k / 3) : Math.floor(k / 3)), rim - k);
+      px('wood0', X + (X <= 15 ? -1 : 1), rim - 5);
+    }
+  }
+  boxCache[part] = c;
+  return c;
 }

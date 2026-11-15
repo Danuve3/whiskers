@@ -7,9 +7,14 @@ import { warmAnimal } from '../sprites/workerClient.ts';
 import { serve, SERVINGS, type PlacedFeeder } from '../sim/feeders.ts';
 import { apply, comfortDistance, hearts, species, stage, type Action, type ActionResult, type AnimalData, type FoodId } from '../sim/model.ts';
 import { matrix } from '../fx/sprites.ts';
+import { bond, affinity, FRIENDS, routineFor, inRoutine, pickRequest, type Routine, type AnimalRequest, type MomentId } from '../sim/life.ts';
+import { growth } from '../sim/life.ts';
+import { scaleShape } from '../sprites/breeds.ts';
+import type { Season } from '../sim/calendar.ts';
 import * as sfx from '../audio/sfx.ts';
 
-export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care' | 'feeder';
+export type Mode = 'idle' | 'walk' | 'rest' | 'flee' | 'watch' | 'goBowl' | 'eat' | 'follow' | 'shelter' | 'sleep' | 'sock' | 'wait' | 'care' | 'feeder'
+  | 'social' | 'routine' | 'ask' | 'spin' | 'box' | 'trick' | 'pounce';
 
 export interface Brain {
   feederId?: string;
@@ -19,6 +24,16 @@ export interface Brain {
   bowl: Bowl | null;
   bandage: number;
   purr: number;
+  /** con quién (amigos, madre) y qué hacen juntos */
+  target?: Entry;
+  social?: 'siesta' | 'acicalar' | 'jugar';
+  /** momento raro en curso (para avisar al verlo) */
+  moment?: MomentId;
+  /** pausa entre trucos al saludarte */
+  trickCD?: number;
+  /** ya ha adoptado la postura del modo actual */
+  posed?: boolean;
+  spinStep?: number;
 }
 
 export interface Entry {
@@ -60,6 +75,10 @@ export interface WorldCtx {
   grid: Grid;
   hour: number;
   raining: boolean;
+  /** viento (|w| > 0.5 = ventoso), estación y si hay nieve cuajada */
+  wind: number;
+  season: Season;
+  snow: number;
   now: number;
   player: { x: number; y: number; moving: boolean };
   shelters: [number, number, number, number][];
@@ -71,6 +90,10 @@ export interface PopulationEvents {
   care(e: Entry, act: Action, res: ActionResult): void;
   toast(msg: string): void;
   sock(e: Entry): void;
+  /** se han hecho amigos */
+  friends?(a: Entry, b: Entry): void;
+  /** empieza un momento raro (el juego decide si se ha visto) */
+  moment?(id: MomentId, e: Entry): void;
 }
 
 const tdist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by) / TILE;
@@ -82,8 +105,56 @@ export class Population {
   feeders: { id: string; x: number; y: number; ref?: PlacedFeeder }[] = [];
 
   private edges: Uint8Array;
+  /** costumbre de cada animal en esta zona */
+  private routines = new Map<string, Routine | null>();
+  private spots: { tile: [number, number]; place: string }[] = [];
+  /** petición en curso (como mucho una a la vez en la zona) */
+  request: AnimalRequest | null = null;
+  private nextRequest = 40 + Math.random() * 60;
+  private bondT = 0;
+  /** gato dentro de una caja de cartón (momento raro) */
+  box: { x: number; y: number; z: number; e: Entry } | null = null;
+
   constructor(private grid: Grid, private ev: PopulationEvents) {
     this.edges = frontEdges(grid);
+  }
+
+  /** Sitios con nombre para las costumbres (bancos, rincones, fuente…). */
+  setSpots(spots: { tile: [number, number]; place: string }[]): void {
+    this.spots = spots;
+    this.routines.clear();
+  }
+  routineOf(D: AnimalData): Routine | null {
+    if (!this.routines.has(D.id)) this.routines.set(D.id, routineFor(D, this.spots));
+    return this.routines.get(D.id) ?? null;
+  }
+  /** ¿Está ahora mismo haciendo su costumbre, en su sitio? */
+  doingRoutine(e: Entry): boolean {
+    const rt = this.routineOf(e.data);
+    return !!rt && e.brain.mode === 'routine' && !e.ent.m.moving && tdist(e.ent.m.x, e.ent.m.y, rt.tile[0] * TILE + 8, rt.tile[1] * TILE + 8) < 1.6;
+  }
+  /** Petición atendida (o caducada). */
+  clearRequest(): void {
+    const r = this.request;
+    this.request = null;
+    this.nextRequest = 90 + Math.random() * 120;
+    const e = r && this.entries.find((x) => x.data.id === r.id);
+    if (e && e.brain.mode === 'ask') {
+      e.brain.mode = 'idle';
+      e.brain.think = 1;
+    }
+  }
+  private busy(e: Entry): boolean {
+    const m = e.brain.mode;
+    return m === 'eat' || m === 'goBowl' || m === 'care' || m === 'feeder' || m === 'flee' || m === 'sock' || m === 'ask' || m === 'social' || m === 'trick' || m === 'spin' || m === 'box' || m === 'pounce' || e.ent.m.moving;
+  }
+  /** Dar vueltas en el sitio (persiguiendo la cola, un truco, chapotear…). */
+  private spin(e: Entry, seconds: number, moment?: MomentId): void {
+    e.ent.m.stop();
+    e.brain.mode = 'spin';
+    e.brain.t = seconds;
+    e.brain.moment = moment;
+    if (moment) this.ev.moment?.(moment, e);
   }
 
   /** Casilla transitable más cercana que no esté en el borde delantero. */
@@ -99,7 +170,14 @@ export class Population {
   }
 
   add(data: AnimalData, tx?: number, ty?: number): Entry {
-    const look = makeLook(data.breed, data.variant, data.seed, data.rare);
+    let look = makeLook(data.breed, data.variant, data.seed, data.rare);
+    // los nacidos en el barrio crecen con los días: más pequeños y con la cabeza grande
+    const g = growth(data, Date.now());
+    if (g < 1) {
+      const gk = Math.round(g * 20) / 20;
+      const S = scaleShape(look.shape, gk), hk = Math.pow(gk, -0.45);
+      look = { ...look, key: `${look.key}-g${gk}`, shape: { ...S, head: [S.head[0] * hk, S.head[1] * hk, S.head[2] * hk], snoutLen: S.snoutLen * 0.8 } };
+    }
     const [sx, sy] = tx !== undefined && ty !== undefined ? [tx, ty] : data.home;
     const p = nearestWalkable(this.grid, sx, sy) ?? [10, 10];
     const ent = new Animal(data.name, look, p[0], p[1], this.grid);
@@ -194,7 +272,180 @@ export class Population {
       e.ent.update(dt, this.grid);
       if (e.brain.bandage > 0) e.brain.bandage -= dt;
       if (e.brain.purr > 0) e.brain.purr -= dt;
+      if (e.brain.trickCD) e.brain.trickCD -= dt;
     }
+    // amistades: pasar tiempo cerca y tranquilos acerca a dos animales
+    this.bondT += dt;
+    if (this.bondT >= 1) {
+      const s = this.bondT;
+      this.bondT = 0;
+      for (let i = 0; i < this.entries.length; i++)
+        for (let j = i + 1; j < this.entries.length; j++) {
+          const a = this.entries[i], b = this.entries[j];
+          if (a.ent.m.moving || b.ent.m.moving) continue;
+          const together = a.brain.target === b || b.brain.target === a;
+          if (!together && tdist(a.ent.m.x, a.ent.m.y, b.ent.m.x, b.ent.m.y) > 2.2) continue;
+          if (bond(a.data, b.data, s * (together ? 3 : 1))) this.ev.friends?.(a, b);
+        }
+    }
+    // peticiones espontáneas: de vez en cuando, alguien que ya confía viene a pedirte algo
+    if (this.request && w.now > this.request.until) this.clearRequest();
+    this.nextRequest -= dt;
+    if (!this.request && this.nextRequest <= 0) {
+      this.nextRequest = 45 + Math.random() * 60;
+      const c = this.entries.filter((e) => !this.busy(e) && this.awake(e, w.hour) && e.brain.mode !== 'sleep' && tdist(e.ent.m.x, e.ent.m.y, w.player.x, w.player.y) < 9);
+      const e = c[Math.floor(Math.random() * c.length)];
+      const R = e && pickRequest(e.data, w.now, Math.random);
+      if (e && R) {
+        this.request = R;
+        e.brain.mode = 'ask';
+        e.brain.think = 0;
+        e.ent.react('alert', 1.2);
+      }
+    }
+  }
+
+  /** Modos de vida propia en curso. Devuelve true si este fotograma ya está decidido. */
+  private lifeModes(e: Entry, dt: number, w: WorldCtx, pd: number, sp: ReturnType<Population['speeds']>): boolean {
+    const B = e.brain, A = e.ent, D = e.data;
+    const end = (think = 1.5) => {
+      B.mode = 'idle';
+      B.think = think;
+      B.posed = false;
+      B.moment = undefined;
+      B.target = undefined;
+      A.inPlace = false;
+    };
+    switch (B.mode) {
+      case 'spin': {
+        if (B.t <= 0) {
+          end();
+          A.play('idle');
+          return true;
+        }
+        A.inPlace = true;
+        B.spinStep = (B.spinStep ?? 0) - dt;
+        if (B.spinStep <= 0) {
+          B.spinStep = 0.14;
+          A.m.dir = (A.m.dir + 1) % 4;
+          A.play('trot');
+        }
+        return true;
+      }
+      case 'trick':
+        if (B.t <= 0) end(2);
+        return true;
+      case 'box':
+        if (B.t <= 0 || pd < 1.2) {
+          if (this.box?.e === e) this.box = null;
+          A.sink = 0;
+          end(2);
+          if (pd < 1.2) A.play('stretch');
+        }
+        return true;
+      case 'pounce':
+        if (!B.posed && B.t < 1.1) {
+          B.posed = true;
+          const a = A.m.dir * (Math.PI / 2) + (Math.random() - 0.5);
+          this.go(e, A.m.x / TILE - 0.5 + Math.cos(a) * 2, A.m.y / TILE - 0.5 + Math.sin(a) * 2, sp.run);
+        }
+        if (B.t <= 0 && !A.m.moving) {
+          end(2);
+          A.play(Math.random() < 0.5 ? 'sit' : 'lick');
+        }
+        return true;
+      case 'ask': {
+        const R = this.request;
+        if (!R || R.id !== D.id || w.now > R.until) {
+          if (R && R.id === D.id) this.clearRequest();
+          else end();
+          return true;
+        }
+        if (A.m.moving) return true;
+        if (pd > 1.9) this.go(e, w.player.x / TILE - 0.5 + 0.8, w.player.y / TILE - 0.5 + 0.8, pd > 4 ? sp.trot : sp.walk);
+        else if (B.think <= 0) {
+          B.think = 2.5;
+          this.faceTo(e, w.player.x, w.player.y);
+          A.play(species(D) === 'dog' && R.kind === 'jugar' ? 'wag' : 'sit');
+          if (species(D) === 'cat' && Math.random() < 0.5) sfx.meow(A.look.shape.legH);
+        }
+        return true;
+      }
+      case 'routine': {
+        const rt = this.routineOf(D);
+        if (!rt || !inRoutine(rt, w.hour) || B.t <= 0) {
+          end(2);
+          return true;
+        }
+        if (A.m.moving) return true;
+        const there = tdist(A.m.x, A.m.y, rt.tile[0] * TILE + 8, rt.tile[1] * TILE + 8) < 1.6;
+        if (!there) {
+          if (!this.go(e, rt.tile[0], rt.tile[1], sp.walk)) end(3);
+          return true;
+        }
+        if (rt.kind === 'ronda' && B.think <= 0) {
+          // ronda: da vueltecitas alrededor de su sitio
+          B.think = 4;
+          this.go(e, rt.tile[0] + Math.round((Math.random() - 0.5) * 3), rt.tile[1] + Math.round((Math.random() - 0.5) * 3), sp.walk);
+          return true;
+        }
+        if (!B.posed) {
+          B.posed = true;
+          A.play(rt.kind === 'siesta' ? 'sleep' : rt.kind === 'sol' ? 'lie' : 'sit');
+          if (rt.kind === 'siesta') A.react('sleep', 3);
+          if (rt.kind === 'sol' && species(D) === 'cat' && !w.raining && w.hour > 9 && w.hour < 19) {
+            B.moment = 'sol';
+            this.ev.moment?.('sol', e);
+          }
+        }
+        return true;
+      }
+      case 'social': {
+        const F = B.target;
+        if (!F || !this.entries.includes(F) || B.t <= 0) {
+          end(3);
+          return true;
+        }
+        if (A.m.moving) return true;
+        const fd = tdist(A.m.x, A.m.y, F.ent.m.x, F.ent.m.y);
+        if (fd > 1.7) {
+          if (F.ent.m.moving || !this.go(e, F.ent.m.x / TILE + 0.3, F.ent.m.y / TILE + 0.3, sp.walk)) end(3);
+          return true;
+        }
+        if (!B.posed) {
+          B.posed = true;
+          this.faceTo(e, F.ent.m.x, F.ent.m.y);
+          // el amigo se une (si no está a otra cosa)
+          const joins = !this.busy(F) || F.brain.mode === 'social';
+          if (joins && F.brain.mode !== 'social') {
+            F.brain.mode = 'social';
+            F.brain.target = e;
+            F.brain.social = B.social;
+            F.brain.t = B.t;
+            F.brain.posed = true;
+            this.faceTo(F, A.m.x, A.m.y);
+          }
+          if (B.social === 'siesta') {
+            A.play('sleep');
+            A.react('sleep', 3);
+            if (joins) F.ent.play('sleep');
+            B.moment = 'siesta';
+            this.ev.moment?.('siesta', e);
+          } else if (B.social === 'acicalar') {
+            A.play('lick');
+            if (joins) F.ent.play('sit');
+            B.moment = 'acicalar';
+            this.ev.moment?.('acicalar', e);
+          } else {
+            this.spin(e, 2.2);
+            if (joins) this.spin(F, 2.2);
+            A.react('heart', 1.5);
+          }
+        }
+        return true;
+      }
+    }
+    return false;
   }
 
   private faceTo(e: Entry, x: number, y: number): void {
@@ -305,6 +556,9 @@ export class Population {
       return;
     }
 
+    // --- vida propia: modos en curso
+    if (this.lifeModes(e, dt, w, pd, sp)) return;
+
     // --- miedo: si te acercas demasiado (salvo que vengas a cuidarlo y ya confíe un poco)
     // si vienes a cuidarlo con calma, aguanta un poco más antes de apartarse
     const approachingMe = w.approaching === D.id;
@@ -355,6 +609,20 @@ export class Population {
           B.mode = 'flee';
           B.t = 3;
         } else B.mode = 'idle';
+      }
+      return;
+    }
+    // perros con trucos aprendidos: te los hacen al saludarte
+    if (D.tricks?.length && hearts(D) >= 3 && pd < 2.3 && !w.player.moving && (B.trickCD ?? 0) <= 0 && !A.m.moving && B.mode !== 'sleep' && B.mode !== 'rest') {
+      B.trickCD = 75 + Math.random() * 60;
+      this.faceTo(e, w.player.x, w.player.y);
+      const t = D.tricks[Math.floor(Math.random() * D.tricks.length)];
+      if (t === 'girar') this.spin(e, 1.2);
+      else {
+        A.play(t === 'tumbarse' ? 'lie' : 'sit');
+        if (t === 'pata') A.react('heart', 1.6);
+        B.mode = 'trick';
+        B.t = 2.4;
       }
       return;
     }
@@ -415,6 +683,71 @@ export class Population {
     if (D.personality === 'travieso' && hearts(D) >= 2 && pd < 6 && Math.random() < 0.05) {
       B.mode = 'sock';
       this.go(e, w.player.x / TILE, w.player.y / TILE, sp.trot);
+      return;
+    }
+    // --- crías: no se separan mucho de su madre
+    if (D.mother) {
+      const M = this.entries.find((x) => x.data.id === D.mother);
+      if (M && tdist(A.m.x, A.m.y, M.ent.m.x, M.ent.m.y) > 1.8 && Math.random() < 0.8) {
+        this.go(e, M.ent.m.x / TILE - 0.5 + (Math.random() - 0.5) * 1.5, M.ent.m.y / TILE - 0.5 + (Math.random() - 0.5) * 1.5, sp.trot);
+        B.mode = 'walk';
+        return;
+      }
+    }
+    // --- su costumbre (sitio y hora favoritos)
+    const rt = this.routineOf(D);
+    if (rt && inRoutine(rt, w.hour) && Math.random() < 0.75) {
+      B.mode = 'routine';
+      B.t = 30 + Math.random() * 30;
+      B.posed = false;
+      if (tdist(A.m.x, A.m.y, rt.tile[0] * TILE + 8, rt.tile[1] * TILE + 8) > 1.2) this.go(e, rt.tile[0], rt.tile[1], sp.walk);
+      return;
+    }
+    // --- amigos: siesta juntos, acicalarse o jugar
+    if (Math.random() < 0.3) {
+      const F = this.entries.find((x) => x !== e && !this.busy(x) && x.brain.mode !== 'sleep' && this.awake(x, w.hour) && affinity(D, x.data) >= FRIENDS);
+      if (F) {
+        const cats = species(D) === 'cat' && species(F.data) === 'cat';
+        B.mode = 'social';
+        B.target = F;
+        B.posed = false;
+        B.social = cats ? (Math.random() < 0.5 ? 'acicalar' : 'siesta') : Math.random() < 0.5 ? 'jugar' : 'siesta';
+        B.t = 25 + Math.random() * 20;
+        this.go(e, F.ent.m.x / TILE + 0.3, F.ent.m.y / TILE + 0.3, sp.walk);
+        return;
+      }
+    }
+    // --- momentos raros
+    const cat = species(D) === 'cat', day = w.hour > 8 && w.hour < 20;
+    if (w.snow > 0.3 && Math.random() < 0.08) {
+      this.ev.moment?.('nieve', e);
+      this.go(e, A.m.tx + Math.round((Math.random() - 0.5) * 6), A.m.ty + Math.round((Math.random() - 0.5) * 6), sp.trot);
+      B.mode = 'walk';
+      return;
+    }
+    if (!cat && Math.random() < (w.raining ? 0.12 : 0.03)) {
+      this.spin(e, 2.6, w.raining ? 'charco' : 'cola');
+      return;
+    }
+    if (cat && ((Math.abs(w.wind) > 0.5 && w.season === 'otoño' && Math.random() < 0.15) || (day && !w.raining && (w.season === 'primavera' || w.season === 'verano') && Math.random() < 0.08))) {
+      B.mode = 'pounce';
+      B.t = 2.2;
+      B.posed = false;
+      B.moment = Math.abs(w.wind) > 0.5 && w.season === 'otoño' ? 'hojas' : 'mariposa';
+      A.play('idle');
+      A.react('alert', 0.9);
+      this.ev.moment?.(B.moment, e);
+      return;
+    }
+    if (cat && !w.raining && !this.box && Math.random() < 0.025) {
+      A.m.stop();
+      this.box = { x: A.m.x, y: A.m.y, z: A.m.z, e };
+      A.play('sit');
+      A.sink = 7;
+      B.mode = 'box';
+      B.t = 22 + Math.random() * 10;
+      B.moment = 'caja';
+      this.ev.moment?.('caja', e);
       return;
     }
     // --- vida normal

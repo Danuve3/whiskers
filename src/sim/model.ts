@@ -36,6 +36,21 @@ export interface AnimalData {
   petted: number;
   /** vista por primera vez por el jugador */
   known: boolean;
+  // ---- vida propia (opcionales: las partidas antiguas no los tienen)
+  /** afinidad con otros animales (id → 0..1) */
+  friends?: Record<string, number>;
+  /** ¿ya has descubierto su costumbre? */
+  routineKnown?: boolean;
+  /** nacimiento (gatitos y cachorros del barrio) y su madre */
+  born?: number;
+  mother?: string;
+  /** trucos aprendidos (perros) */
+  tricks?: string[];
+  /** adoptado por un vecino */
+  adoptedBy?: string;
+  adoptedAt?: number;
+  /** visitante de temporada: se va al acabar su temporada */
+  visitor?: string;
 }
 
 export const PERSONALITIES: Record<Personality, { name: string; blurb: string }> = {
