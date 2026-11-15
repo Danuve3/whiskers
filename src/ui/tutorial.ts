@@ -36,7 +36,14 @@ export class Tutorial {
       setTimeout(() => this.box.remove(), 500);
       return;
     }
-    this.box.replaceChildren(el('span', { class: 'paw' }, '·'), STEPS[this.step].text);
+    // la pista se puede cerrar; la siguiente aparece al avanzar
+    const x = el('button', { class: 'tuto-x', 'aria-label': 'Cerrar pista' }, '×');
+    x.addEventListener('pointerup', (e) => {
+      e.stopPropagation();
+      this.box.classList.add('out');
+    });
+    this.box.replaceChildren(el('span', { class: 'paw' }, '·'), el('span', { class: 'txt' }, STEPS[this.step].text), x);
+    this.box.classList.remove('out');
     this.box.classList.remove('pop');
     void this.box.offsetWidth;
     this.box.classList.add('pop');

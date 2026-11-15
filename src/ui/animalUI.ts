@@ -20,10 +20,16 @@ export function toast(msg: string, ms = 2800): void {
   const t = el('div', { class: 'toast panel ui-text' }, msg);
   toastBox.append(t);
   while (toastBox.childElementCount > 3) toastBox.firstElementChild!.remove();
-  setTimeout(() => {
+  // se va solo, o antes si lo tocas
+  let gone = false;
+  const close = () => {
+    if (gone) return;
+    gone = true;
     t.classList.add('out');
     setTimeout(() => t.remove(), 400);
-  }, ms);
+  };
+  t.addEventListener('pointerup', close);
+  setTimeout(close, ms);
 }
 
 export function heartsRow(n: number): HTMLElement {

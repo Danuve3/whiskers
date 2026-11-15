@@ -99,13 +99,19 @@ function next(): void {
     el('div', {}, el('div', { class: 'small' }, def.secret ? '¡Logro secreto!' : '¡Logro conseguido!'), el('div', { class: 'big' }, a.name), el('div', { class: 'small' }, `${a.desc} · ${rewardText(a.reward)}`)),
   );
   bannerBox.append(b);
-  setTimeout(() => {
+  // se va solo, o antes si lo tocas
+  let gone = false;
+  const close = () => {
+    if (gone) return;
+    gone = true;
     b.classList.add('out');
     setTimeout(() => {
       b.remove();
       next();
     }, 500);
-  }, 3200);
+  };
+  b.addEventListener('pointerup', close);
+  setTimeout(close, 3200);
 }
 
 // ---------------------------------------------------------------- Álbum

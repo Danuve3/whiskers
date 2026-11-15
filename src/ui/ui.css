@@ -172,3 +172,12 @@
 .tuto.pop { animation: banner-in 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .tuto.out { animation: toast-out 0.5s ease-in both; }
 body:has(.sheet.open) .tuto { visibility: hidden; }
+.tuto .txt { flex: 1; }
+.tuto-x { pointer-events: auto; flex: 0 0 auto; margin: calc(var(--u) * -4) calc(var(--u) * -4) calc(var(--u) * -4) 0; padding: 0 calc(var(--u) * 3);
+  min-width: calc(var(--u) * 16); min-height: calc(var(--u) * 16); background: none; border: 0; font-family: var(--font); font-size: calc(var(--u) * 10);
+  line-height: 1; color: #85603f; cursor: pointer; }
+.tuto-x:active { color: #4a2430; }
+.tuto.out .tuto-x { pointer-events: none; }
+/* avisos y banners: se cierran con un toque */
+.toast, .banner { pointer-events: auto; cursor: pointer; }
+.toast.out, .banner.out { pointer-events: none; }

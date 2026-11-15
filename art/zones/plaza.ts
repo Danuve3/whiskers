@@ -6,6 +6,7 @@ import { box, Frame } from '../voxel/shapes.ts';
 import { buildHouse, GROUND_Z, type HouseInfo, type HouseSpec } from '../modules/house.ts';
 import { fountain, lamp, bench, tree, kiosk, planter, type FountainInfo } from '../modules/props.ts';
 import { DECALS, resetDecals } from '../decals.ts';
+import { blockSolids } from './collide.ts';
 
 export const T = 16;
 
@@ -259,6 +260,7 @@ export function buildPlaza(): ZoneBuild {
   }
   walk[6 * TW + 18] = 0; // tronco árbol 1 (296,108)
   walk[18 * TW + 6] = 0; // tronco árbol 2 (100,290)
+  blockSolids(w, objects, TW, TH, height, walk);
 
   return {
     name: 'plaza', world: w, tilesW: TW, tilesH: TH, objects, lights, smoke, steam, lines, shelters, fountains,
