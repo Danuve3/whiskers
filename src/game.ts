@@ -156,6 +156,8 @@ export class Game {
   /** cámara paseando (pantalla de título) */
   titleDrift = false;
   private exitCooldown = 0;
+  /** las salidas solo se activan después de haber andado (al llegar se aparece dentro de la de vuelta) */
+  private exitsArmed = false;
 
   async init(startZone: ZoneId = 'calle', spawn?: [number, number]): Promise<void> {
     const now = new Date();
@@ -292,6 +294,7 @@ export class Game {
     this.cam.y = fy - 30;
     this.cam.follow = true;
     this.exitCooldown = 1.2;
+    this.exitsArmed = false;
   }
 
   /** Dibujables de la decoración colocada en esta zona (y efectos en los animales). */
@@ -644,9 +647,13 @@ export class Game {
     this.exitCooldown -= dt;
     if (this.exitCooldown <= 0 && !this.opts.shot) {
       const tx = this.player.m.tx, ty = this.player.m.ty;
-      const ex = this.zoneDef.exits.find((e) => tx >= e.r[0] && tx < e.r[2] && ty >= e.r[1] && ty < e.r[3]);
-      if (ex) {
+      if (this.player.m.moving) this.exitsArmed = true;
+      // se viaja al pararse en una salida a la que se ha ido a propósito; cruzarla de camino a
+      // otro sitio (la calle baja conecta varias) no hace nada
+      const ex = this.player.m.moving ? undefined : this.zoneDef.exits.find((e) => tx >= e.r[0] && tx < e.r[2] && ty >= e.r[1] && ty < e.r[3]);
+      if (ex && this.exitsArmed) {
         this.exitCooldown = 3;
+        this.exitsArmed = false;
         if (zoneOpen(ex.to, this.world.stats, this.world.animals)) void this.travel(ex.to, ex.spawn);
         else {
           this.player.m.stop();

@@ -68,8 +68,8 @@ function stairsY(c: ZoneCtx, tx0: number, ply: number): void {
       }
     }
   for (const tx of [tx0, tx0 + 1]) {
-    c.height[(ply - 2) * c.TW + tx] = G - 10;
-    c.height[(ply - 1) * c.TW + tx] = G - 26;
+    c.height[(ply - 2) * c.TW + tx] = G - 12;
+    c.height[(ply - 1) * c.TW + tx] = G - 24;
   }
   for (const ty of [ply - 2, ply - 1]) {
     c.walk[ty * c.TW + tx0 - 1] = 0;
@@ -94,8 +94,8 @@ function stairsX(c: ZoneCtx, ty0: number, plx: number): void {
       }
     }
   for (const ty of [ty0, ty0 + 1]) {
-    c.height[ty * c.TW + plx - 2] = G - 10;
-    c.height[ty * c.TW + plx - 1] = G - 26;
+    c.height[ty * c.TW + plx - 2] = G - 12;
+    c.height[ty * c.TW + plx - 1] = G - 24;
   }
   for (const tx of [plx - 2, plx - 1]) {
     c.walk[(ty0 - 1) * c.TW + tx] = 0;

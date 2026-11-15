@@ -240,7 +240,7 @@ export function buildPlaza(): ZoneBuild {
       if (tx >= 3 && tx < 7 && ty >= 3 && ty < 6) height[i] = TZ;
       if (tx >= 4 && tx < 6 && ty === 6) height[i] = G + 8;
       if ((tx === 3 || tx === 6) && ty === 6) walk[i] = 0; // laterales de la escalera
-      if (tx >= 14 && tx < 16 && ty >= 18 && ty < 20) height[i] = ty === 18 ? G - 10 : G - 26;
+      if (tx >= 14 && tx < 16 && ty >= 18 && ty < 20) height[i] = ty === 18 ? G - 12 : G - 24;
       // pretil interior junto a la escalera hundida
       if ((tx === 13 || tx === 16) && (ty === 18 || ty === 19)) walk[i] = 0;
     }
