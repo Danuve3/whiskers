@@ -132,12 +132,15 @@ const BUBBLE = (inner: string[]) => [
   '....kwk....',
   '.....k.....',
 ];
-const NEED_ART: Record<'food' | 'water' | 'hurt', string[]> = {
-  food: BUBBLE(['.b.b.b.', 'bybyby.', 'rrrrrrr', '.RrrrR.', '..RRR..']),
+const NEED_ART: Record<'fish' | 'meat' | 'water' | 'hurt', string[]> = {
+  // pescado (gatos) y muslo de pollo (perros), gota y cruz de farmacia
+  fish: BUBBLE(['.......', '.SSSS.S', 'SKmmmSS', '.cccc.m', '.......']),
+  meat: BUBBLE(['.oo....', 'oYoo...', 'oooO...', '.OOOc..', '....cc.']),
   water: BUBBLE(['...s...', '..sss..', '.sSsss.', '.sSSss.', '..sss..']),
-  hurt: BUBBLE(['.....tt', '...tttt', '..tpwt.', 'tttt...', 'tt.....']),
+  hurt: BUBBLE(['...g...', '...g...', '.ggggG.', '...g...', '...G...']),
 };
-const NEED_KEY: Key = { '.': null, k: 'ink2', w: 'cal4', b: 'wood3', y: 'mustard', r: 'coral', R: 'rose', s: 'sky', S: 'water2', t: 'tan', p: 'peach' };
-export function needBubble(kind: 'food' | 'water' | 'hurt'): HTMLCanvasElement {
-  return matrix('need-' + kind, NEED_ART[kind], NEED_KEY);
+const NEED_KEY: Key = { '.': null, k: 'ink2', K: 'ink', w: 'cal4', c: 'cal2', s: 'sky', S: 'water2', m: 'stone3', o: 'tile3', O: 'tile2', Y: 'butter', g: 'veg3', G: 'veg2' };
+export function needBubble(kind: 'food' | 'water' | 'hurt', cat = false): HTMLCanvasElement {
+  const k = kind === 'food' ? (cat ? 'fish' : 'meat') : kind;
+  return matrix('need-' + k, NEED_ART[k], NEED_KEY);
 }

@@ -151,7 +151,7 @@ export function openMap(game: Game): void {
         : iconImg('candado', 'icon small');
     list.append(el('div', { class: `zone-row${here ? ' current' : ''}${open ? '' : ' locked'}` },
       el('div', { class: 'info' }, el('div', { class: 'name' }, z.title),
-        open && needy[id] ? el('div', { class: 'needy' }, iconImg('comida', 'icon tiny'), `${needy[id]} ${needy[id] === 1 ? 'animal necesita' : 'animales necesitan'} algo`) : null,
+        open && needy[id] ? el('div', { class: 'needy' }, iconImg('corazon', 'icon tiny'), `${needy[id]} ${needy[id] === 1 ? 'animal necesita' : 'animales necesitan'} algo`) : null,
         el('div', { class: 'small' }, open ? z.blurb : z.unlockHint)),
       action,
     ));

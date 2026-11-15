@@ -27,7 +27,7 @@ import { matrix } from './fx/sprites.ts';
 import type { Outfit } from './sprites/player.ts';
 import { Population, bowlDistance, type Entry } from './world/population.ts';
 import { isFeeder, SERVINGS } from './sim/feeders.ts';
-import { generateAnimal, comfortDistance, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
+import { generateAnimal, comfortDistance, species, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
 export interface WorldState {
   animals: AnimalData[];
@@ -1080,7 +1080,7 @@ export class Game {
       if (this.pop.bowls.some((bw) => bw.forId === D.id && bw.state === 'full')) continue;
       const kind = D.injured ? 'hurt' : Math.min(D.hunger, D.thirst) < 0.35 ? (D.hunger <= D.thirst ? 'food' : 'water') : null;
       if (!kind) continue;
-      const img = needBubble(kind);
+      const img = needBubble(kind, species(D) === 'cat');
       const [sx, sy] = a.screenPos();
       const top = a.look.shape.legH * 2.3 + 12 + Math.round(Math.sin(now * 2 + D.seed) * 1.5);
       b.drawImage(img, Math.round(sx - camX - img.width / 2), Math.round(sy - camY - top));

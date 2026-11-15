@@ -5,6 +5,7 @@ import { showHint } from './tutorial.ts';
 import { hearts, species } from '../sim/model.ts';
 import type { ZoneId } from '../world/zones.ts';
 import type { Game } from '../game.ts';
+import { foodIcon } from './animalUI.ts';
 import type { Entry } from '../world/population.ts';
 import type { MetaState } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
@@ -67,20 +68,20 @@ export class AnimalStrip {
         const fills = [el('i', {}), el('i', {}), el('i', {})];
         const bars = el('div', { class: 'mini-bars' },
           el('div', { class: 'bar food' }, fills[0]), el('div', { class: 'bar thirst' }, fills[1]), el('div', { class: 'bar well' }, fills[2]));
-        const need = iconImg('comida', 'icon tiny need');
+        const need = iconImg(foodIcon(e.data), 'icon tiny need');
         const row = el('button', { class: 'strip-row panel ui-text' }, portrait(e.data, false, 36, 36), el('div', { class: 'who' }, el('div', { class: 'nm' }, e.data.name), bars), need);
         row.addEventListener('pointerup', (ev) => {
           ev.stopPropagation();
           sfx.ui('tap');
           this.onPick(e);
         });
-        r = { row, fills, e, need, needKind: 'comida' };
+        r = { row, fills, e, need, needKind: foodIcon(e.data) };
         this.rows.set(e.data.id, r);
       }
       const D = e.data;
       [D.hunger, D.thirst, D.wellbeing].forEach((v, i) => (r!.fills[i].style.width = `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`));
       // icono de lo que más necesita (el mismo que el bocadillo)
-      const kind = D.injured ? 'tirita' : Math.min(D.hunger, D.thirst) < 0.35 ? (D.hunger <= D.thirst ? 'comida' : 'agua') : '';
+      const kind = D.injured ? 'cruz' : Math.min(D.hunger, D.thirst) < 0.35 ? (D.hunger <= D.thirst ? foodIcon(D) : 'gota') : '';
       r.need.style.visibility = kind ? 'visible' : 'hidden';
       if (kind && kind !== r.needKind) {
         r.needKind = kind;
@@ -106,12 +107,12 @@ interface HintCtx {
 }
 
 const HINTS: HintDef[] = [
-  { id: 'burbujas', text: 'Los bocadillos sobre los animales te dicen qué necesitan: un cuenco es hambre, una gota es sed y una tirita, una cura.', when: (c) => c.game.pop.entries.some((e) => needsCare(e.data)) },
+  { id: 'burbujas', text: 'Los bocadillos sobre los animales te dicen qué necesitan: un muslo o un pescado es hambre, una gota es sed y una cruz verde, una cura.', when: (c) => c.game.pop.entries.some((e) => needsCare(e.data)) },
   { id: 'lista', text: 'La pestaña con el corazón, a la izquierda, enseña a todos los animales de esta zona. Toca uno para ir hasta él.', when: (c) => c.minutes > 3 && !c.used('lista') && c.game.pop.entries.length >= 2 },
   { id: 'mapa', text: 'Con el mapa (arriba a la derecha) puedes ir a cualquier zona abierta del barrio.', when: (c) => c.minutes > 4 && !c.used('mapa') && (c.meta.zonesOpen?.length ?? 0) >= 2 },
   { id: 'zona-nueva', text: 'Hay una zona abierta que aún no has visitado. ¡Mira el mapa!', when: (c) => (c.meta.zonesOpen ?? []).some((z) => !(c.meta.visited ?? []).includes(z)) && c.minutes > 2 },
   { id: 'laser', text: 'A los gatos que te tienen 2 corazones o más les encanta perseguir el puntero láser. Tócalo y elige el láser.', when: (c) => !c.stats.laser && c.game.pop.entries.some((e) => species(e.data) === 'cat' && hearts(e.data) >= 2) },
-  { id: 'tirita', text: 'Si un animal lleva el bocadillo de la tirita, necesita una cura. Cuando confíe lo bastante en ti, podrás curarlo.', when: (c) => !c.stats.curar && c.game.pop.entries.some((e) => e.data.injured) },
+  { id: 'tirita', text: 'Si un animal lleva el bocadillo de la cruz verde, necesita una cura. Cuando confíe lo bastante en ti, podrás curarlo.', when: (c) => !c.stats.curar && c.game.pop.entries.some((e) => e.data.injured) },
   { id: 'armario', text: 'En el armario (la percha de abajo) puedes cambiar de ropa. Desbloquearás prendas nuevas jugando.', when: (c) => c.minutes > 12 && !c.used('armario') },
   { id: 'decor', text: 'Ya tienes algo de decoración: colócala en el barrio desde el botón de la casita. Los comederos ayudan a los animales.', when: (c) => c.meta.decor.length > 0 && !(c.meta.placed ?? []).length },
   { id: 'pesca', text: 'En el espigón del puerto puedes pescar sardinas: son un manjar para los gatos.', when: (c) => c.game.zoneId === 'puerto' && !c.stats.pesca },

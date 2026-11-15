@@ -38,6 +38,11 @@ export function heartsRow(n: number): HTMLElement {
   return row;
 }
 
+/** Icono de comida según la especie: muslo de pollo para los perros, pescado para los gatos. */
+export function foodIcon(D: Parameters<typeof species>[0]): string {
+  return species(D) === 'cat' ? 'pez' : 'muslo';
+}
+
 // ---------------------------------------------------------------- Menú radial
 let current: { root: HTMLElement; close: () => void } | null = null;
 
@@ -70,8 +75,8 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
     return el('div', { class: 'need' }, iconImg(ico, 'icon tiny'), el('div', { class: `bar ${cls}` }, fill));
   };
   const needBox = el('div', { class: 'needs' },
-    need('comida', 'food', () => D.hunger), need('agua', 'thirst', () => D.thirst), need('corazon', 'well', () => D.wellbeing));
-  const hurt = el('div', { class: 'hurt' }, iconImg('tirita', 'icon tiny'), 'Necesita una tirita');
+    need(foodIcon(D), 'food', () => D.hunger), need('gota', 'thirst', () => D.thirst), need('corazon', 'well', () => D.wellbeing));
+  const hurt = el('div', { class: 'hurt' }, iconImg('cruz', 'icon tiny'), 'Necesita una cura');
   // progreso hacia el siguiente corazón
   const trustFill = el('i', {});
   const trustBar = el('div', { class: 'trustbar' }, trustFill);
@@ -97,10 +102,10 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   const specials = (Object.keys(FOODS) as FoodId[]).filter((f) => f !== 'pienso' && (inv[f] ?? 0) > 0);
   type B = { icon: string; act: Action | 'card' | 'laser'; label: string };
   const items: B[] = [
-    { icon: 'comida', act: 'feed', label: 'Dar de comer' },
-    { icon: 'agua', act: 'water', label: 'Dar agua' },
-    { icon: 'tirita', act: 'heal', label: 'Curar' },
-    { icon: 'mano', act: 'pet', label: 'Acariciar' },
+    { icon: foodIcon(D), act: 'feed', label: 'Dar de comer' },
+    { icon: 'gota', act: 'water', label: 'Dar agua' },
+    { icon: 'cruz', act: 'heal', label: 'Curar' },
+    { icon: 'corazon', act: 'pet', label: 'Acariciar' },
     { icon: 'ficha', act: 'card', label: 'Ficha' },
   ];
   if (species(D) === 'cat') items.splice(4, 0, { icon: 'laser', act: 'laser', label: 'Jugar con el láser' });
