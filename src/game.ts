@@ -29,6 +29,8 @@ import { Population, bowlDistance, type Entry } from './world/population.ts';
 import { isFeeder, SERVINGS } from './sim/feeders.ts';
 import type { MomentId } from './sim/life.ts';
 import type { HappeningId } from './sim/rhythm.ts';
+import { whereIs, type ScheduleSlot } from './sim/neighbors.ts';
+import { makeLook } from './sprites/breeds.ts';
 import { pickTreasure, VISITORS, visitorData, type TreasureDef, type WorldNow } from './sim/collect.ts';
 import { generateAnimal, comfortDistance, species, hearts, type Action, type ActionResult, type AnimalData, type FoodId } from './sim/model.ts';
 
@@ -112,7 +114,9 @@ export class Game {
   world: WorldState = newWorld(1);
   events: GameEvents = { animalTap: () => {}, groundTap: () => {}, toast: () => {}, care: () => {} };
   pending: { e: Entry; act: Action; food: FoodId; repath: number } | null = null;
-  npcs: { nb: Neighbor; ent: Player }[] = [];
+  /** vecinos presentes: siguen su horario por el barrio (y Lúa pasea a su galga) */
+  npcs: { nb: Neighbor; ent: Player; slot: ScheduleSlot | null; leaving: boolean; t: number; pet: number; dog?: Animal; dogT: number }[] = [];
+  private npcT = 0;
   /** decoración colocada en esta zona (dibujable) */
   decor: (Drawable & { id: string; tx: number; ty: number; ref: { id: string; zone: string; fill?: number; tx: number; ty: number } })[] = [];
   /** comedero que se va a rellenar al llegar a su lado */
@@ -281,6 +285,117 @@ export class Game {
     this.events.playHint?.(null);
     this.events.playDone?.(e, 'escondite', Math.round(S.t));
   }
+
+  // ---------------------------------------------------------------- Vecinos por el barrio
+  /** Llegan (por la entrada) o se van (por la salida) según su horario. */
+  syncNpcs(walking: boolean): void {
+    const G = this.grid;
+    for (const nb of NEIGHBORS) {
+      const slot = whereIs(nb.id, this.hour);
+      const here = this.npcs.find((n) => n.nb.id === nb.id);
+      const should = slot?.zone === this.zoneId;
+      if (here && !should && !here.leaving) {
+        // se marcha por la salida más cercana
+        here.leaving = true;
+        const ex = this.zoneDef.exits[0];
+        const t = nearestWalkable(G, Math.floor((ex.r[0] + ex.r[2]) / 2), Math.floor((ex.r[1] + ex.r[3]) / 2));
+        const p = t && findPath(G, here.ent.m.tx, here.ent.m.ty, t[0], t[1]);
+        if (p) here.ent.m.setPath(p);
+        else here.ent.m.stop();
+      } else if (here && should) {
+        here.slot = slot;
+        here.leaving = false;
+      } else if (!here && should && slot) {
+        const start = walking ? this.zoneDef.entry : slot.at;
+        const s0 = nearestWalkable(G, start[0], start[1]);
+        if (!s0) continue;
+        const ent = new Player(s0[0], s0[1], G, npcOutfit(nb.id));
+        ent.m.dir = 1;
+        const n = { nb, ent, slot, leaving: false, t: Math.random() * 3, pet: 3 + Math.random() * 4, dogT: 0 } as (typeof this.npcs)[number];
+        if (nb.id === 'lua') {
+          // Chispa, su galga, va con ella a todas partes
+          n.dog = new Animal('Chispa', makeLook('galgo', 1, 4242), s0[0], s0[1], G);
+          n.dog.m.speed = 34;
+        }
+        this.npcs.push(n);
+        if (walking) {
+          const t = nearestWalkable(G, slot.at[0], slot.at[1]);
+          const p = t && findPath(G, s0[0], s0[1], t[0], t[1]);
+          if (p) ent.m.setPath(p);
+        }
+      }
+    }
+  }
+
+  private updateNpcs(dt: number): void {
+    const G = this.grid;
+    this.npcT -= dt;
+    if (this.npcT <= 0) {
+      this.npcT = 4;
+      this.syncNpcs(true);
+    }
+    for (const n of this.npcs) {
+      const m = n.ent.m;
+      n.ent.update(dt, G, this.weather.rain > 0.3);
+      n.t -= dt;
+      n.pet -= dt;
+      if (n.leaving) continue;
+      const S = n.slot;
+      if (S && !m.moving && n.t <= 0) {
+        const far = Math.hypot(m.tx - S.at[0], m.ty - S.at[1]) > 1.5;
+        let target: [number, number] | null = null;
+        if (S.activity === 'stroll') {
+          n.t = 6 + Math.random() * 5;
+          target = [S.at[0] + Math.round((Math.random() - 0.5) * 6), S.at[1] + Math.round((Math.random() - 0.5) * 6)];
+        } else if (S.activity === 'jog') {
+          // vueltas al muelle a buen ritmo
+          n.t = 0.5;
+          const k = Math.floor(Math.random() * 4), R = 4;
+          target = [S.at[0] + (k === 0 ? R : k === 2 ? -R : 0), S.at[1] + (k === 1 ? R : k === 3 ? -R : 0)];
+        } else {
+          n.t = 5;
+          if (far) target = S.at;
+        }
+        if (target) {
+          const t = nearestWalkable(G, target[0], target[1]);
+          const p = t && findPath(G, m.tx, m.ty, t[0], t[1]);
+          if (p && p.length > 1) m.setPath(p);
+        }
+      }
+      // se paran a hacer carantoñas a los animales que tienen cerca
+      if (!m.moving && n.pet <= 0) {
+        n.pet = 6 + Math.random() * 6;
+        const a = this.pop.entries.find((e) => Math.hypot(e.ent.m.x - m.x, e.ent.m.y - m.y) / TILE < 2.2 && e.brain.mode !== 'flee' && e.brain.mode !== 'sleep');
+        if (a) {
+          m.dir = dirTo(m.x, m.y, a.ent.m.x, a.ent.m.y, m.dir);
+          n.ent.action = 'crouch';
+          n.ent.actionT = 1.6;
+          a.ent.react('heart', 1.4);
+          a.data.wellbeing = Math.min(1, a.data.wellbeing + 0.02);
+        }
+      }
+      // la galga de Lúa la sigue
+      const d = n.dog;
+      if (d) {
+        n.dogT -= dt;
+        const dist = Math.hypot(d.m.x - m.x, d.m.y - m.y) / TILE;
+        if (n.dogT <= 0 && dist > 1.4) {
+          n.dogT = 0.8;
+          d.m.speed = dist > 3 ? 52 : 34;
+          const t = nearestWalkable(G, m.tx + 1, m.ty);
+          const p = t && findPath(G, d.m.tx, d.m.ty, t[0], t[1]);
+          if (p && p.length > 1) d.m.setPath(p);
+        }
+        d.update(dt, G);
+        if (!d.m.moving && d.state === 'walk') d.play('idle');
+      }
+    }
+    // los que se iban y ya han llegado a la salida desaparecen
+    this.npcs = this.npcs.filter((n) => !(n.leaving && !n.ent.m.moving));
+  }
+
+  /** ¿Tiene este vecino algo nuevo que contarte (capítulo o encargo listo)? */
+  npcHasNews?: (id: string) => boolean;
 
   /** Quita a un animal de la zona (adoptado). */
   removeAnimal(id: string): void {
@@ -518,14 +633,8 @@ export class Game {
     this.populate();
     this.updateVisitors();
     if (Math.random() < 0.7) setTimeout(() => this.spawnTreasure(), 4000);
-    // vecinos
-    for (const n of this.zoneDef.npcs) {
-      const nb = NEIGHBORS.find((x) => x.id === n.id);
-      if (!nb) continue;
-      const ent = new Player(n.at[0], n.at[1], this.grid, npcOutfit(nb.id));
-      ent.m.dir = n.at[2];
-      this.npcs.push({ nb, ent });
-    }
+    // vecinos: los que a esta hora están en esta zona, ya en su sitio
+    this.syncNpcs(false);
     this.structures = [];
     this.refreshStructures();
     this.ambient = new Ambient(m, this.bounds);
@@ -1222,7 +1331,7 @@ export class Game {
         }
       }
     }
-    for (const n of this.npcs) n.ent.update(dt, this.grid, this.weather.rain > 0.3);
+    this.updateNpcs(dt);
     // paseo hasta la fuente (para las misiones)
     const fo = this.zone.meta.fountains[0];
     this.fountainT -= dt;
@@ -1356,7 +1465,7 @@ export class Game {
     }
     // sombras de contacto (dos tonos, multiplicando)
     b.globalCompositeOperation = 'multiply';
-    for (const e of [this.player, ...this.npcs.map((n) => n.ent), ...this.animals]) {
+    for (const e of [this.player, ...this.npcs.map((n) => n.ent), ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])), ...this.animals]) {
       const [sx, sy] = 'feet' in e ? e.feet() : e.screenPos();
       const big = e instanceof Animal ? (e.look.shape.legH > 15 ? 11 : 8) : 8;
       b.drawImage(pixelEllipse(big, Math.ceil(big / 2.5), '#b9b1cf'), Math.round(sx - camX - big), Math.round(sy - camY - Math.ceil(big / 2.5)));
@@ -1451,7 +1560,7 @@ export class Game {
         { box: [BX.x - 8, BX.y + 7, BX.z, BX.x + 8, BX.y + 8, BX.z + 10], rect: [bsx - 15, bsy - 11, 31, 26], draw: (ctx, cx, cy) => ctx.drawImage(front, Math.round(bsx - 15 - cx), Math.round(bsy - 11 - cy)) },
       );
     }
-    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.structures, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent));
+    list.push(this.player, ...this.animals, ...this.pop.bowls, ...this.decor, ...this.structures, ...this.ambient.drawables, ...this.fest.props, ...this.npcs.map((n) => n.ent), ...this.npcs.flatMap((n) => (n.dog ? [n.dog] : [])));
     for (const e of this.pop.entries) e.ent.hat = this.fest.hats;
     const sorted = topoSort(list);
     // oclusión: los objetos delante del jugador que lo tapan se vuelven semitransparentes
@@ -1544,6 +1653,17 @@ export class Game {
       const [sx, sy] = a.screenPos();
       const top = a.look.shape.legH * 2.3 + 12 + Math.round(Math.sin(now * 2 + D.seed) * 1.5);
       b.drawImage(img, Math.round(sx - camX - img.width / 2), Math.round(sy - camY - top));
+    }
+    // vecinos con algo nuevo que contarte: «!» sobre la cabeza
+    for (const n of this.npcs) {
+      if (n.leaving || !this.npcHasNews?.(n.nb.id)) continue;
+      const [fx, fy] = n.ent.feet();
+      const X = Math.round(fx - camX), Y = Math.round(fy - camY - 62 - Math.abs(Math.sin(now * 3)) * 3);
+      b.fillStyle = PALETTE.ink2;
+      b.fillRect(X - 2, Y - 1, 5, 10);
+      b.fillStyle = PALETTE.mustard;
+      b.fillRect(X - 1, Y, 3, 5);
+      b.fillRect(X - 1, Y + 6, 3, 2);
     }
     // +♥ al ganar confianza
     for (const f of this.floaters) {

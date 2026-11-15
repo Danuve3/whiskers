@@ -15,6 +15,7 @@ import type { MetaHost } from '../meta/controller.ts';
 import * as sfx from '../audio/sfx.ts';
 import { momentsGrid, lettersList, collectionsGrid } from './life.ts';
 import { HAPPENINGS, CHALLENGES, PROJECTS, taskProgress } from '../sim/rhythm.ts';
+import type { Chapter } from '../sim/neighbors.ts';
 
 // ---------------------------------------------------------------- Retratos
 export function portrait(a: { breed: string; variant: number; seed: number; rare: AnimalData['rare'] }, silhouette: boolean, w = 48, h = 48): HTMLCanvasElement {
@@ -246,7 +247,14 @@ export function openMissions(h: MetaHost): void {
 }
 
 // ---------------------------------------------------------------- Vecinos
-export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward: (errand: Neighbor['errands'][number]) => void): void {
+export interface StoryView {
+  chapters: Chapter[];
+  unlocked: number;
+  read: number;
+  onRead: (k: number) => void;
+}
+
+export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward: (errand: Neighbor['errands'][number]) => void, story?: StoryView): void {
   const sheet = new Sheet(`${nb.name}, ${nb.role}`, 'neighbor');
   const c = el('canvas', { width: 40, height: 40, class: 'face' });
   const f = getPlayerFrames(outfit, 'idle', 0)[0];
@@ -288,6 +296,32 @@ export function openNeighbor(h: MetaHost, nb: Neighbor, outfit: Outfit, onReward
     errandBox.append(el('div', { class: 'footer' }, give));
   };
   showErrand();
+  // su historia: el último capítulo desbloqueado, y los anteriores para releer
+  if (story && story.unlocked > 0) {
+    const box = el('div', { class: 'story panel' });
+    // se abre en el primer capítulo sin leer (la historia se sigue en orden)
+    let cur = Math.min(story.read, story.unlocked - 1);
+    const render = () => {
+      const c = story.chapters[cur];
+      const nav = el('div', { class: 'chapters' }, ...story.chapters.map((ch, i) => {
+        const b = button(i < story.unlocked ? String(i + 1) : '·', () => {
+          if (i >= story.unlocked) return;
+          cur = i;
+          render();
+        }, i === cur ? 'on' : i >= story.unlocked ? 'off' : '');
+        b.title = i < story.unlocked ? ch.title : 'Capítulo por descubrir';
+        return b;
+      }));
+      const next = story.unlocked < story.chapters.length ? el('div', { class: 'small' }, 'Su historia sigue… sé buen vecino y vuelve otro día.') : el('div', { class: 'small' }, 'Fin de su historia. ¡Gracias por escucharla!');
+      box.replaceChildren(el('div', { class: 'sub' }, `Su historia · ${cur + 1}. ${c.title}`), ...c.lines.map((l) => el('p', { class: 'wl' }, l)), nav, next);
+      if (cur >= story.read) {
+        story.read = cur + 1;
+        story.onRead(cur);
+      }
+    };
+    render();
+    sheet.body.append(box);
+  }
   sheet.body.append(el('div', { class: 'footer' }, button('Adiós', () => void sheet.close())));
   sheet.open();
 }

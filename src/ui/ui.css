@@ -268,3 +268,8 @@ body:has(.sheet.open) .strip, body:has(.title-screen) .strip, body:has(.laserbar
 .vignette.play { touch-action: none; cursor: crosshair; }
 .foodrow { flex-wrap: nowrap; }
 .happening { margin: calc(var(--u) * -1) calc(var(--u) * 4) calc(var(--u) * 2); color: #5e3f36; }
+/* Historias de los vecinos */
+.story { margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 2) calc(var(--u) * 3); }
+.story .wl { font-size: calc(var(--u) * 7); line-height: 1.4; margin: calc(var(--u) * 1.5) 0; }
+.story .chapters { display: flex; gap: calc(var(--u) * 2); justify-content: center; margin: calc(var(--u) * 2) 0; }
+.story .chapters .btn { min-width: calc(var(--u) * 14); min-height: calc(var(--u) * 13); padding: 0; }

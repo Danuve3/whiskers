@@ -5,7 +5,7 @@ import { setupUI, button, Sheet, el, setHaptics, haptic } from './ui/kit.ts';
 import { openEditor } from './ui/editor.ts';
 import { load, store, type SaveData } from './save/save.ts';
 import { openRadial, closeRadial, openCard, toast } from './ui/animalUI.ts';
-import { decay, hearts, FOODS, species, rng, type Action } from './sim/model.ts';
+import { decay, hearts, FOODS, species, rng, generateAnimal, type Action } from './sim/model.ts';
 import { audio } from './audio/engine.ts';
 import { music } from './audio/music.ts';
 import * as sfx from './audio/sfx.ts';
@@ -13,7 +13,8 @@ import { openSettings } from './ui/settings.ts';
 import { paramsFor, type Sky } from './sim/weather.ts';
 import { EVENTS, type Season, type EventId } from './sim/calendar.ts';
 import { newMeta, evaluate, bump, giftTick, collectGift, giveReward, type MetaHost } from './meta/controller.ts';
-import { rewardText, NEIGHBORS } from './sim/progress.ts';
+import { rewardText, NEIGHBORS, errandProgress } from './sim/progress.ts';
+import { STORIES, unlockedChapters } from './sim/neighbors.ts';
 import { lifeLines, openTrickGame, openAdoption } from './ui/life.ts';
 import { openBrush, openBath } from './ui/games.ts';
 import { tideAt } from './sim/fishing.ts';
@@ -179,6 +180,30 @@ function startHappening(H: Happening): void {
     let n = 0;
     for (const a of W.animals) if (a.zone === 'plaza' && species(a) === 'dog' && n++ < 3) a.muddy = true;
   }
+}
+
+// ---------------------------------------------------------------- Vecinos
+function nbState(id: string): { points: number; talkDay: number; read: number } {
+  const N = (W.meta.neighbors ??= {});
+  return (N[id] ??= { points: 0, talkDay: -1, read: 0 });
+}
+/** ¿Tiene algo nuevo que contarte (capítulo sin leer o encargo listo para entregar)? */
+game.npcHasNews = (id) => {
+  const st = nbState(id);
+  if (unlockedChapters(id, st, W.meta.projects ?? {}) > st.read) return true;
+  const nb = NEIGHBORS.find((n) => n.id === id);
+  if (!nb) return false;
+  const { errand, progress } = errandProgress(W.meta.errands, nb, W.stats as Record<string, number>);
+  return !!errand && W.meta.errands.start[id] !== undefined && progress >= errand.n;
+};
+/** Final de la historia de Maruxa: la nieta de Pementa aparece en la plaza. */
+function pementa(): void {
+  if (W.animals.some((a) => a.id === 'n-pementa')) return;
+  const base = generateAnimal(777_001, { zone: 'plaza', breeds: ['persa'], used: [], now: Date.now(), home: [9, 5] });
+  const D = { ...base, id: 'n-pementa', name: 'Pementa', breed: 'persa', variant: 0, personality: 'dormilon' as const, rare: null, injured: false, trust: 2.2, trustMax: 2.2 };
+  W.animals.push(D);
+  if (game.zoneId === 'plaza') game.pop.add(D, 9, 5);
+  toast('Una gata blanca, viejita y preciosa, se ha instalado junto a la panadería: Pementa.', 5000);
 }
 
 // ---------------------------------------------------------------- Vida propia de los animales
@@ -406,11 +431,34 @@ game.events = {
     else if (act === 'heal') toast(`Le pones una tirita a ${e.data.name}. ¡Como nuevo!`);
     check();
   },
-  npcTap: (nb) => openNeighbor(host, nb, npcOutfit(nb.id), (er) => {
-    giveReward(host, er.reward);
-    toast(`${nb.name} te da: ${rewardText(er.reward)}`);
-    check();
-  }),
+  npcTap: (nb) => {
+    const st = nbState(nb.id);
+    const today = dayIndex(Date.now());
+    if (st.talkDay !== today) {
+      st.talkDay = today;
+      st.points += 1;
+    }
+    const chapters = STORIES[nb.id] ?? [];
+    openNeighbor(host, nb, npcOutfit(nb.id), (er) => {
+      giveReward(host, er.reward);
+      st.points += 3;
+      toast(`${nb.name} te da: ${rewardText(er.reward)}`);
+      check();
+    }, {
+      chapters, unlocked: unlockedChapters(nb.id, st, W.meta.projects ?? {}), read: st.read,
+      onRead: (k) => {
+        st.read = Math.max(st.read, k + 1);
+        const r = chapters[k]?.reward;
+        if (r) {
+          giveReward(host, r);
+          toast(`${nb.name} te da: ${rewardText(r)}`);
+        }
+        bump(host, 'capitulos');
+        if (nb.id === 'maruxa' && k === 3) pementa();
+        check();
+      },
+    });
+  },
   giftTap: (i) => {
     haptic(12);
     sfx.gift();

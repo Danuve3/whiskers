@@ -36,6 +36,8 @@ export interface MetaState {
   happening?: { day: number; id: string; start: number; done: boolean };
   challenge?: { key: string; start: number; done: boolean };
   projects?: Record<string, { start: number; done: boolean }>;
+  /** amistad e historia de cada vecino */
+  neighbors?: Record<string, { points: number; talkDay: number; read: number }>;
   /** capturas de pesca (id → veces) */
   fish?: Record<string, number>;
   /** casilla del jugador al guardar (se vuelve ahí al abrir el juego) */
