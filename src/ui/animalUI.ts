@@ -62,7 +62,28 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
   }
   const root = el('div', { class: 'radial ui-text' });
   const ring = el('div', { class: 'ring' });
-  const tag = el('div', { class: 'tag panel' }, el('span', {}, D.name), heartsRow(hearts(D)));
+  // estado de un vistazo: comida, agua y bienestar (se actualizan en directo)
+  const needs: [HTMLElement, () => number][] = [];
+  const need = (ico: string, cls: string, v: () => number) => {
+    const fill = el('i', {});
+    needs.push([fill, v]);
+    return el('div', { class: 'need' }, iconImg(ico, 'icon tiny'), el('div', { class: `bar ${cls}` }, fill));
+  };
+  const needBox = el('div', { class: 'needs' },
+    need('comida', 'food', () => D.hunger), need('agua', 'thirst', () => D.thirst), need('corazon', 'well', () => D.wellbeing));
+  const hurt = el('div', { class: 'hurt' }, iconImg('tirita', 'icon tiny'), 'Necesita una tirita');
+  const tag = el('div', { class: 'tag panel' }, el('span', {}, D.name), heartsRow(hearts(D)), needBox, hurt);
+  let lastHearts = hearts(D);
+  const refreshNeeds = () => {
+    for (const [fill, v] of needs) fill.style.width = `${Math.round(Math.max(0, Math.min(1, v())) * 100)}%`;
+    hurt.style.display = D.injured ? '' : 'none';
+    const h = hearts(D);
+    if (h !== lastHearts) {
+      lastHearts = h;
+      tag.children[1].replaceWith(heartsRow(h));
+    }
+  };
+  refreshNeeds();
   const why = el('div', { class: 'why panel' });
   why.style.display = 'none';
   root.append(ring, tag, why);
@@ -144,8 +165,9 @@ export function openRadial(game: Game, e: Entry, onCard: (e: Entry) => void, onL
     const k = v.zoom / v.dpr;
     const x = (sx - camX) * k, y = (sy - camY - e.ent.look.shape.legH * 1.4) * k;
     // márgenes según el tamaño real del menú, para que nunca se corte
+    refreshNeeds();
     const u = uiUnit();
-    const mx = (R + 13) * u, top = (R * 0.85 + 34) * u, bottom = 40 * u;
+    const mx = (R + 13) * u, top = (R * 0.85 + 34 + 26 + (D.injured ? 9 : 0)) * u, bottom = 40 * u;
     root.style.left = `${Math.max(mx, Math.min(innerWidth - mx, x))}px`;
     root.style.top = `${Math.max(top, Math.min(innerHeight - bottom, y))}px`;
     requestAnimationFrame(follow);
